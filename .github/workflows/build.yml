@@ -2,15 +2,33 @@ name: Build Windows
 on:
   workflow_dispatch:
   push:
-    paths: ['src/**', 'CMakeLists.txt', '.github/workflows/build.yml']
+    paths: ['src/**', 'tests/**', 'CMakeLists.txt', 'build.cmd', 'LEIA-ME.md', '.github/workflows/build.yml']
+permissions:
+  contents: read
 jobs:
   windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-      - run: cmake -S . -B build -A x64
-      - run: cmake --build build --config Release
+      - name: Configure
+        run: cmake -S . -B build -A x64
+      - name: Compile native launcher
+        run: cmake --build build --config Release
+      - name: Verify migration, artwork, dialogs and button capture
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Include instructions
+        run: Copy-Item LEIA-ME.md build/Release/LEIA-ME.md
       - uses: actions/upload-artifact@v4
         with:
           name: FeatherPad-Windows-x64
-          path: build/Release/FeatherPad.exe
+          path: |
+            build/Release/FeatherPad.exe
+            build/Release/LEIA-ME.md
+      - name: Test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FeatherPad-test-report
+          path: |
+            build/self-test.log
+            build/Testing/Temporary/LastTest.log
