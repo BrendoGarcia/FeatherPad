@@ -11,7 +11,7 @@ Device* deviceFor(HANDLE handle) {
  USHORT count=caps.NumberInputValueCaps;d.values.resize(count);
  if(count&&HidP_GetValueCaps(HidP_Input,d.values.data(),&count,pp)!=HIDP_STATUS_SUCCESS)d.values.clear();else d.values.resize(count);
  UINT pathSize=0;GetRawInputDeviceInfoW(handle,RIDI_DEVICENAME,nullptr,&pathSize);
- if(pathSize&&pathSize<32768){std::wstring path(pathSize,L'\0');if(GetRawInputDeviceInfoW(handle,RIDI_DEVICENAME,&path[0],&pathSize)!=static_cast<UINT>(-1)&&isVirtualBusPath(path))return nullptr;}
+ if(controllerCompatibility&&pathSize&&pathSize<32768){std::wstring path(pathSize,L'\0');if(GetRawInputDeviceInfoW(handle,RIDI_DEVICENAME,&path[0],&pathSize)!=static_cast<UINT>(-1)&&isVirtualBusPath(path))return nullptr;}
  auto entry=devices.emplace(handle,std::move(d));
  status(L"Controle conectado. Sua biblioteca está pronta.");return &entry.first->second;
 }
