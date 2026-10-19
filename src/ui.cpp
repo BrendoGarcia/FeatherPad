@@ -26,11 +26,26 @@ namespace {
   DrawTextW(dc,s.c_str(),static_cast<int>(s.size()),&r,flags);SelectObject(dc,old);
  }
  void lineAt(HDC dc,int x,int y,int width,COLORREF color=line){fill(dc,box(x,y,width,1),color);}
+ // A white ring with a dark separator remains visible on mint primary buttons,
+ // dark surfaces and arbitrary artwork. Native controls use an inset ring so
+ // their child-window clipping cannot cut off the focus indicator.
+ void focusRing(HDC dc,RECT r,bool inset=false) {
+  InflateRect(&r,inset?-4:4,inset?-4:4);
+  auto oldBrush=SelectObject(dc,GetStockObject(HOLLOW_BRUSH));
+  HPEN separator=CreatePen(PS_SOLID,7,RGB(3,8,14));
+  HPEN outline=CreatePen(PS_SOLID,3,RGB(255,255,255));
+  auto oldPen=SelectObject(dc,separator);
+  RoundRect(dc,r.left,r.top,r.right,r.bottom,12,12);
+  SelectObject(dc,outline);RoundRect(dc,r.left,r.top,r.right,r.bottom,12,12);
+  SelectObject(dc,oldPen);SelectObject(dc,oldBrush);
+  DeleteObject(separator);DeleteObject(outline);
+ }
  void button(HDC dc,const std::wstring& text,RECT r,int id,bool primary=false,int game=-1) {
   const int hit=static_cast<int>(hits.size());
   const bool focus=keyboardFocus==hit,hover=hovered==hit;
-  round(dc,r,primary?accent:(hover?RGB(42,58,77):RGB(31,44,60)),focus?accent:CLR_INVALID,10);
+  round(dc,r,primary?accent:(hover?RGB(42,58,77):RGB(31,44,60)),CLR_INVALID,10);
   label(dc,text,r,mediumFont,primary?ink:white,DT_CENTER|DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS);
+  if(focus)focusRing(dc,r);
   hits.push_back({r,id,game});
  }
  void cover(HDC dc,const Game& g,RECT r,int index) {
@@ -121,7 +136,12 @@ void initTheme() {
 void destroyTheme(){for(HFONT f:{smallFont,bodyFont,mediumFont,titleFont,heroFont})if(f)DeleteObject(f);if(bgBrush)DeleteObject(bgBrush);if(inputBrush)DeleteObject(inputBrush);}
 void darkTitle(HWND h){BOOL dark=TRUE;DwmSetWindowAttribute(h,20,&dark,sizeof(dark));DwmSetWindowAttribute(h,19,&dark,sizeof(dark));}
 void status(const std::wstring& message){notice=message;if(win&&IsWindowVisible(win))InvalidateRect(win,nullptr,FALSE);}
-void show(){ShowWindow(win,SW_RESTORE);SetForegroundWindow(win);SetFocus(captureWin?captureWin:(panel?panel:win));InvalidateRect(win,nullptr,FALSE);}
+void show(){
+ // SW_RESTORE also unmaximizes a visible window. Only restore minimized ones;
+ // SW_SHOW keeps both maximized geometry and the user's normal window size.
+ ShowWindow(win,IsIconic(win)?SW_RESTORE:SW_SHOW);
+ SetForegroundWindow(win);SetFocus(captureWin?captureWin:(panel?panel:win));InvalidateRect(win,nullptr,FALSE);
+}
 void hide(){if(panel||captureWin)return;ShowWindow(win,SW_HIDE);clearArt();}
 
 void paintMain(HDC dc,RECT client) {
@@ -144,7 +164,7 @@ void paintMain(HDC dc,RECT client) {
  else label(dc,profileName.substr(0,1),avatar,mediumFont,accent,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
  label(dc,profileName,box(78,h-81,108,28),mediumFont);
  label(dc,L"Perfil local  ›",box(78,h-53,108,20),smallFont,muted);
- if(keyboardFocus==static_cast<int>(hits.size())){RECT focus=box(18,h-88,172,65);SetDCBrushColor(dc,accent);FrameRect(dc,&focus,static_cast<HBRUSH>(GetStockObject(DC_BRUSH)));}
+ if(keyboardFocus==static_cast<int>(hits.size()))focusRing(dc,box(18,h-88,172,65));
  hits.push_back({box(18,h-88,172,65),A_PROFILE});
  const int x=242,cw=w-x-34;
  label(dc,L"BIBLIOTECA PESSOAL",box(x,25,cw-250,22),smallFont,accent);
@@ -184,10 +204,10 @@ void paintMain(HDC dc,RECT client) {
  for(int j=0;j<columns&&firstVisible+j<static_cast<int>(visibleGames.size());++j) {
   const int index=visibleGames[firstVisible+j],left=x+j*(cardW+16);
   RECT r=box(left,rowY,cardW,cardH);const auto& g=games[index];
-  if(index==selection){RECT border=r;InflateRect(&border,4,4);round(dc,border,accent,accent,14);}
+  if(index==selection){RECT border=r;InflateRect(&border,2,2);round(dc,border,accent,accent,12);}
   cover(dc,g,r,index);
   if(g.favorite){round(dc,box(left+cardW-32,rowY+8,24,24),sidebar);label(dc,L"★",box(left+cardW-32,rowY+8,24,24),bodyFont,gold,DT_CENTER|DT_VCENTER|DT_SINGLELINE);}
-  if(keyboardFocus==static_cast<int>(hits.size())){RECT border=r;InflateRect(&border,6,6);FrameRect(dc,&border,static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));}
+  if(keyboardFocus==static_cast<int>(hits.size())||(keyboardFocus<0&&index==selection))focusRing(dc,r);
   hits.push_back({r,0,index});
   label(dc,g.name,box(left,rowY+cardH+12,cardW,24),mediumFont,index==selection?accent:white);
  }
@@ -200,21 +220,23 @@ void drawButton(const DRAWITEMSTRUCT* item) {
  const bool toggle=item->CtlID==A_STARTUP||item->CtlID==A_AUTOOPEN||item->CtlID==A_DRAFT_FAVORITE;
  if(toggle) {
   const bool checked=item->CtlID==A_STARTUP?startupEnabled():item->CtlID==A_AUTOOPEN?autoOpen:favoriteDraft;
-  round(item->hDC,item->rcItem,surface,item->itemState&ODS_FOCUS?accent:CLR_INVALID,8);
+  round(item->hDC,item->rcItem,surface,CLR_INVALID,8);
   const int middle=(item->rcItem.top+item->rcItem.bottom)/2;
   RECT mark=box(item->rcItem.left+10,middle-9,18,18);
   round(item->hDC,mark,checked?accent:bg,checked?accent:muted,4);
   if(checked)label(item->hDC,L"✓",mark,smallFont,ink,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
   RECT caption=item->rcItem;caption.left+=40;
   label(item->hDC,textOf(item->hwndItem),caption,bodyFont,white);
+  if(item->itemState&ODS_FOCUS)focusRing(item->hDC,item->rcItem,true);
   return;
  }
 
  const bool primary=item->CtlID==A_PLAY||item->CtlID==A_SAVE_GAME||item->CtlID==A_SAVE_PROFILE||item->CtlID==A_CAPTURE_SAVE;
  const bool disabled=(item->itemState&ODS_DISABLED)!=0;
  const bool pressed=(item->itemState&ODS_SELECTED)!=0;
- round(item->hDC,item->rcItem,disabled?surface:(primary?accent:(pressed?line:RGB(34,48,65))),item->itemState&ODS_FOCUS?accent:CLR_INVALID,10);
+ round(item->hDC,item->rcItem,disabled?surface:(primary?accent:(pressed?line:RGB(34,48,65))),CLR_INVALID,10);
  label(item->hDC,textOf(item->hwndItem),item->rcItem,mediumFont,disabled?muted:(primary?ink:white),DT_CENTER|DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS);
+ if(!disabled&&(item->itemState&ODS_FOCUS))focusRing(item->hDC,item->rcItem,true);
 }
 void openPage(Page requested,int gameIndex) {
  if(panel){SetForegroundWindow(captureWin?captureWin:panel);return;}

@@ -21,7 +21,7 @@ int WINAPI wWinMain(HINSTANCE h,HINSTANCE,LPWSTR args,int) {
  if(!selfTesting) {
   singleton=CreateMutexW(nullptr,FALSE,L"Local\\FeatherPad.Singleton.v1");if(!singleton)return 1;
   if(GetLastError()==ERROR_ALREADY_EXISTS) {
-   HWND other=FindWindowW(L"FeatherPadWindow",nullptr);if(other){ShowWindow(other,SW_RESTORE);SetForegroundWindow(other);}CloseHandle(singleton);return 0;
+   HWND other=FindWindowW(L"FeatherPadWindow",nullptr);if(other){ShowWindow(other,IsIconic(other)?SW_RESTORE:SW_SHOW);SetForegroundWindow(other);}CloseHandle(singleton);return 0;
   }
  }
  const HRESULT com=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);

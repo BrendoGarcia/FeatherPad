@@ -49,7 +49,29 @@ int runSelfTest() {
  keyboardFocus=-1;controllerDirection(0,-1);check(keyboardFocus>=0,"controller can leave carousel and reach interface actions");
  selection=0;keyboardFocus=-1;controllerDirection(1,0);check(selection==1,"horizontal controller movement advances library carousel");
  selection=0;keyboardFocus=-1;
+ // Render the actual mint primary button into a bitmap. Its focused edge must
+ // be white and different from its unfocused edge, rather than mint-on-mint.
+ HWND sample=CreateWindowExW(0,L"BUTTON",L"Salvar",WS_CHILD|BS_OWNERDRAW,0,0,180,48,win,nullptr,instance,nullptr);
+ DRAWITEMSTRUCT item{};item.CtlType=ODT_BUTTON;item.CtlID=A_SAVE_GAME;item.hwndItem=sample;item.hDC=memory;item.rcItem=RECT{0,0,180,48};
+ drawButton(&item);const COLORREF unfocused=GetPixel(memory,4,24);
+ item.itemState=ODS_FOCUS;drawButton(&item);
+ check(GetPixel(memory,4,24)==RGB(255,255,255)&&GetPixel(memory,4,24)!=unfocused,"primary-button focus has a contrasting white edge");
+ item.CtlID=A_AUTOOPEN;item.itemState=0;drawButton(&item);const COLORREF toggleEdge=GetPixel(memory,4,24);
+ item.itemState=ODS_FOCUS;drawButton(&item);
+ check(GetPixel(memory,4,24)==RGB(255,255,255)&&GetPixel(memory,4,24)!=toggleEdge,"settings-toggle focus uses the same high-contrast edge");
+ DestroyWindow(sample);
  SelectObject(memory,old);DeleteObject(bitmap);DeleteDC(memory);ReleaseDC(win,screen);
+ // Opening settings must preserve the main window's state and normal bounds.
+ ShowWindow(win,SW_SHOWNORMAL);RECT normalBounds{};GetWindowRect(win,&normalBounds);
+ openPage(Page::Settings);closePanel();RECT afterSettings{};GetWindowRect(win,&afterSettings);
+ check(!IsZoomed(win)&&EqualRect(&normalBounds,&afterSettings),"settings preserve normal window geometry");
+ ShowWindow(win,SW_MAXIMIZE);openPage(Page::Settings);
+ check(IsZoomed(win)!=FALSE,"opening settings preserves maximization");closePanel();
+ check(IsZoomed(win)!=FALSE,"closing settings preserves maximization");
+ hide();show();check(IsZoomed(win)!=FALSE,"hiding and showing preserves maximization");
+ ShowWindow(win,SW_MINIMIZE);show();
+ check(IsWindowVisible(win)&&!IsIconic(win)&&IsZoomed(win),"restoring a minimized maximized window preserves maximization");
+ ShowWindow(win,SW_SHOWNORMAL);
  openPage(Page::Settings);check(panel&&IsWindow(panel),"open dedicated settings window");
  beginCapture(A_CAPTURE_OPEN);check(captureWin&&captureAction==A_CAPTURE_OPEN,"open action-specific controller popup");
  HANDLE fake=reinterpret_cast<HANDLE>(static_cast<INT_PTR>(123));
