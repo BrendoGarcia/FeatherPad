@@ -1,0 +1,16 @@
+name: Build Windows
+on:
+  workflow_dispatch:
+  push:
+    paths: ['src/**', 'CMakeLists.txt', 'github/workflows/build.yml']
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake -S . -B build -A x64
+      - run: cmake --build build --config Release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FeatherPad-Windows-x64
+          path: build/Release/FeatherPad.exe
