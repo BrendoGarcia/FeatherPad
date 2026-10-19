@@ -1,123 +1,189 @@
-# FeatherPad — launcher nativo leve para Windows
+# FeatherPad 2 — sua biblioteca de jogos
 
-Projeto C++17 / Win32, sem navegador, Python, Java, Electron ou bibliotecas de terceiros em tempo de execucao. Interface em portugues simples. Licenca MIT.
+Launcher nativo para Windows x64, escrito em C++17 e Win32. Sem navegador, Electron, Java, Python, conta ou conexão com a internet em tempo de execução.
 
-## Estado desta entrega
+## O que mudou nesta versão
 
-Codigo-fonte implementado e revisado estaticamente. Este pacote NAO inclui executavel compilado: o ambiente de desenvolvimento desta entrega nao tem SDK/compilador Windows disponivel. Nao foi executado em Windows nem testado com controle fisico. Use as instrucoes abaixo para gerar o executavel e validar. A meta de 20–50 MB de RAM e um objetivo, nao um resultado medido ou uma garantia.
+- Tema escuro, destaque do jogo selecionado e biblioteca com capas em carrossel.
+- Perfil local com nome e imagem, favoritos e coleção filtrada.
+- Cadastro e edição em janelas próprias, separados da biblioteca.
+- Pop-ups de configuração do controle: ação identificada, espera pela entrada, detecção de conflito e confirmação antes de salvar.
+- Diagnóstico em uma janela própria, claramente separado da configuração.
+- Capas importadas como miniaturas PNG; cache limitado e liberado ao ocultar.
+- Ícone próprio, navegação por controle/teclado e compilação pelo GitHub Actions preservados.
 
-## 1. Gerar o executavel
+## Atualizar a versão anterior sem perder os jogos
 
-### Alternativa A: no GitHub, sem instalar compilador no PC
+1. Encerre o monitor antigo pelo menu do ícone na bandeja: **Encerrar monitor**. Fechar a janela no X apenas a oculta.
+2. Extraia este ZIP. Ele contém a pasta `FeatherPad` com o projeto completo.
+3. No repositório que você já usou no GitHub, substitua os arquivos do projeto pelos desta versão. **Inclua os novos arquivos de `src`, a pasta `tests` e `.github/workflows/build.yml`**. Substituir somente `main.cpp` não basta.
+4. Mantenha `CMakeLists.txt` e as pastas `src`, `tests` e `.github` na raiz do repositório, sem uma pasta FeatherPad extra envolvendo tudo.
+5. Faça commit e push. Abra **Actions > Build Windows** e aguarde os testes e a compilação. Também pode usar **Run workflow** manualmente.
+6. Na execução verde, baixe o artefato **FeatherPad-Windows-x64**, extraia e substitua o seu executável anterior.
+7. Se mantiver a mesma pasta/nome do EXE, a inicialização com Windows continua apontando para o mesmo caminho. Se mudar de pasta, desative e reative essa opção.
 
-1. Crie um repositorio vazio na sua conta GitHub.
-2. Extraia o ZIP. Abra o CMD na pasta FeatherPad que contem CMakeLists.txt.
-3. Com Git instalado, execute (substitua a URL pela do seu repositorio):
+O cadastro é lido de `%LOCALAPPDATA%\FeatherPad\library.ini`, o mesmo endereço da versão anterior. Campos antigos são preservados. As capas começam vazias: edite cada jogo para adicioná-las. Na primeira gravação, o arquivo anterior é copiado para `library.ini.backup`, se esse backup ainda não existir.
+
+Não abra a versão antiga depois de cadastrar capas/favoritos: ela não conhece os novos campos e pode removê-los ao salvar. Para voltar à v1, encerre o monitor e restaure manualmente seu backup.
+
+## Primeiro build pelo GitHub, sem instalar compilador
+
+Se ainda não tem repositório:
+
+1. Crie um repositório vazio na sua conta GitHub.
+2. Extraia o ZIP e abra o CMD **dentro da pasta FeatherPad**, onde está `CMakeLists.txt`.
+3. Com o Git instalado, execute, substituindo a URL:
 
 ```cmd
 git init
 git add .
-git commit -m "FeatherPad inicial"
+git commit -m "FeatherPad 2"
 git branch -M main
 git remote add origin https://github.com/SEU-USUARIO/featherpad.git
 git push -u origin main
 ```
 
-4. Abra a aba Actions do repositorio. O workflow Build Windows deve executar automaticamente. Tambem pode ser iniciado pelo botao Run workflow.
-5. Apos o workflow ficar verde, abra a execucao e baixe o artefato FeatherPad-Windows-x64. E necessario estar conectado ao GitHub para baixar artefatos.
-6. Extraia FeatherPad.exe para uma pasta fixa, por exemplo C:\Apps\FeatherPad. Execute com duplo clique.
+4. Abra **Actions > Build Windows**. Depois de ficar verde, baixe o artefato **FeatherPad-Windows-x64**. Você precisa estar conectado ao GitHub para baixar artefatos.
+5. Extraia o EXE para uma pasta fixa, por exemplo `C:\Apps\FeatherPad`, e abra.
 
-O workflow fornecido e a propria verificacao de compilacao no Windows; se falhar, envie o log. Use o repositorio com os arquivos na raiz, sem uma pasta FeatherPad extra envolvendo CMakeLists.txt. O executavel nao e assinado digitalmente.
+O mesmo workflow compila no Windows, testa a migração dos dados, a importação de imagens, a interface e a configuração de botões, e publica o executável. O relatório fica no artefato **FeatherPad-test-report**. Se algo falhar, consulte esse relatório e o log da execução.
 
-### Alternativa B: compilar localmente
+## Biblioteca e capas
 
-Instale Visual Studio Build Tools com o componente Desenvolvimento para desktop com C++ e o SDK do Windows. Depois abra **x64 Native Tools Command Prompt for VS**, entre nesta pasta e execute:
+- Clique **Adicionar jogo** ou pressione **A**.
+- Informe o nome e clique **Procurar** para escolher um `.exe`, `.lnk` ou `.url`. Também pode informar uma URI como `steam://rungameid/292030`.
+- Preencha argumentos e pasta de trabalho somente se o jogo precisar. O caminho do executável não deve ter aspas externas; os argumentos podem ter aspas.
+- Use **Escolher capa** e selecione um PNG, JPG ou BMP local. Recomendado: capa vertical, aproximadamente 600 × 900 pixels. Limite de entrada: 2048 × 2048 pixels e 8 MB. PNG transparente recebe fundo escuro/preto na conversão.
+- Opcionalmente, escreva uma descrição curta e marque favorito.
+- Clique **Salvar jogo**.
 
-```cmd
-build.cmd
-```
+A imagem é convertida e copiada para o perfil, em até **300 × 420 pixels**, mantendo a proporção. Você pode mover ou apagar a imagem original depois de salvar. Capas não são baixadas automaticamente. Se faltar uma imagem, o jogo continua funcionando e recebe uma arte com seu nome. Capas são recortadas no centro para preencher os cartões.
 
-Resultado esperado: `dist\FeatherPad.exe`. O runtime C++ e vinculado estaticamente: para executar em outro computador nao precisa instalar Visual Studio. O compilador e necessario apenas para criar o EXE.
+Selecione um cartão para destacar o jogo. Use **Jogar agora**, Enter ou o botão configurado de confirmar. Duplo clique na capa também inicia o jogo. Para alterar, use **Editar** ou **E**. Para excluir, abra Editar e escolha **Excluir da lista**: os arquivos do jogo são preservados.
 
-Tambem existe suporte a CMake:
+Clientes como Steam continuam necessários quando exigidos pelo jogo. FeatherPad abre o executável/atalho/URI; não substitui autenticação da loja nem detecta jogos automaticamente.
+
+## Perfil e favoritos
+
+Clique no perfil no canto inferior esquerdo ou pressione **P** para trocar nome e imagem. Esse perfil é local à sua conta do Windows, sem login ou cadastro online. Não é um sistema de múltiplos perfis.
+
+Use a estrela no painel do jogo, a tecla **F** ou o botão de favoritar no controle. A seção **Favoritos** mostra somente os jogos marcados. Todos os dados ficam salvos entre execuções.
+
+## Configurar o controle — passo a passo
+
+1. Abra **Configurações** na barra lateral, ou pressione **S**.
+2. Na ação desejada, clique no botão **Alterar**.
+3. Um pop-up mostra exatamente o que está sendo configurado: abrir o launcher, confirmar/jogar, voltar/ocultar ou favoritar.
+4. **Solte todos os botões primeiro.** O programa só aceita uma nova pressão depois de receber uma entrada com os botões soltos daquele controle.
+5. Pressione o botão desejado. Se estiver atribuído a outra ação, o pop-up informa o conflito e espera outro botão.
+6. Confira o número detectado e clique **Salvar botão** ou pressione Enter. A alteração só é aplicada nesse momento.
+7. **Cancelar**, o X do pop-up ou Esc preservam o botão anterior.
+
+Depois que um candidato foi identificado, os botões atuais de confirmar e voltar também podem salvar/cancelar. Durante a espera inicial, use mouse ou Esc para cancelar, pois o programa precisa poder capturar inclusive o seu botão de voltar.
+
+Cada ação usa um botão diferente; combinações não são suportadas. Para trocar dois botões entre si, atribua temporariamente um botão livre a uma das ações.
+
+Mapeamento inicial comum em controles Sony (os números reais podem variar):
+
+| Ação | Botão HID inicial | Referência comum |
+|---|---:|---|
+| Abrir/ocultar launcher | 13 | PS |
+| Confirmar/jogar | 2 | X |
+| Voltar/ocultar | 3 | Círculo |
+| Favoritar | 4 | Triângulo |
+
+Configurações personalizadas da v1 são preservadas. Se o novo favorito colidir com uma delas, é escolhido um número livre; confira em Configurações.
+
+**Testar os botões do controle** abre uma tela de diagnóstico: ela mostra os números recebidos e **não altera nenhum mapeamento**. Nessa tela, use Concluir ou Esc para sair.
+
+## Navegação
+
+Na biblioteca:
+
+- Direcional/analógico para esquerda e direita: passar pelos jogos.
+- Para cima/baixo: alcançar as ações da interface; a borda verde mostra o foco. Ao chegar a um cartão, esquerda/direita voltam a navegar pela coleção.
+- Confirmar: executar a ação em foco ou iniciar o jogo selecionado.
+- Favoritar: alternar a estrela do jogo selecionado.
+- Voltar: ocultar a biblioteca.
+
+Nas janelas de configurações, cadastro ou perfil, o direcional alterna entre os campos/botões e confirmar aciona o botão em foco. Digitação de texto e seleção de arquivos usam teclado/mouse. Na captura, o foco fica no pop-up para evitar abrir jogos por acidente.
+
+Teclado: setas para navegar, Tab/Shift+Tab para percorrer ações, Enter para confirmar, F para favorito, S para configurações, A para adicionar, E para editar, P para perfil e Esc para voltar/ocultar.
+
+## Bluetooth, USB e segundo plano
+
+Primeiro pareie o controle no Windows ou conecte por USB. FeatherPad recebe joystick/gamepad HID pelo Raw Input, inclusive quando está oculto. Não abre uma segunda conexão Bluetooth e não modifica drivers.
+
+**O monitor precisa estar rodando para detectar o controle.** Ligar o controle não inicia um aplicativo totalmente encerrado. Em Configurações, ative **Iniciar com o Windows** para que o monitor fique pronto após o login.
+
+**Mostrar a biblioteca ao conectar o controle** é opcional; por padrão, a janela só aparece ao usar o botão de abertura. O monitor continua sem animações nem polling periódico de Bluetooth.
+
+X, Esc e o botão de voltar ocultam a janela. Ao iniciar um jogo, ela também é ocultada e o cache de capas é liberado. Para encerrar de verdade: clique com o botão direito no ícone da bandeja e escolha **Encerrar monitor**.
+
+Controles apresentados exclusivamente como XInput ainda não têm backend dedicado. DualShock 4 e DualSense dependem do descriptor HID exposto pelo Windows. Steam Input, DS4Windows e overlays podem ocultar dispositivos ou responder ao mesmo botão. Para diagnosticar, teste primeiro sem remapeadores. O programa não bloqueia o botão PS para outros aplicativos. O Windows também pode limitar a tomada de foco; nesse caso, use o ícone da bandeja.
+
+## Leveza e limites de memória
+
+- Um processo e uma thread de interface, aguardando eventos do Windows.
+- Interface desenhada com GDI e fontes do sistema, sem motor de navegador ou GPU de jogo.
+- Imagens lidas com Windows Imaging Component, convertido para miniaturas locais.
+- Cache máximo de seis imagens de até 300 × 420 pixels: cerca de 2,9 MiB de pixels, além das estruturas do programa.
+- Cache liberado ao ocultar/minimizar a biblioteca; nenhum timer de animação ou vídeo.
+- Buffer de pintura temporário, liberado ao terminar de desenhar.
+
+**A meta continua sendo 20–50 MB de RAM, mas não há garantia nem medição no seu PC nesta entrega.** Codecs de imagem, resolução da janela, escala do Windows e bibliotecas do sistema afetam o pico e o working set. A importação pode consumir mais transitoriamente que a janela oculta. Para economizar, use capas pequenas e evite maximizar em monitores de resolução muito alta.
+
+Confira FeatherPad.exe no Gerenciador de Tarefas após um minuto: janela aberta, janela oculta, controle desconectado e jogo rodando. Para comparar corretamente, registre a mesma métrica (working set ou bytes privados) em cada cenário. A versão 2 acrescenta imagens e, portanto, precisa ser medida novamente em relação à v1.
+
+## Dados, backup e desinstalação
+
+Dados: `%LOCALAPPDATA%\FeatherPad\library.ini` e a subpasta `art` com as miniaturas. Faça backup da pasta inteira com o monitor encerrado. O EXE pode ficar em qualquer pasta fixa.
+
+Não há telemetria, download de capas, coleta de perfil ou login. Limite de 2000 jogos; descrições têm até 160 caracteres e nome de perfil até 40. Outros campos têm até 8000, sem quebras de linha.
+
+Ao remover uma capa ou um jogo, a miniatura importada permanece em `art` para evitar apagar uma imagem ainda referenciada. Você pode limpar arquivos órfãos manualmente com o monitor encerrado, após fazer backup.
+
+Para desinstalar: desative Iniciar com o Windows, encerre o monitor e apague a pasta do EXE. Se quiser eliminar o cadastro e as capas, apague também a pasta de dados. Jogos originais são preservados.
+
+## Compilação local opcional
+
+Com Visual Studio Build Tools, componente **Desenvolvimento para desktop com C++** e SDK do Windows, abra **x64 Native Tools Command Prompt for VS** nesta pasta e execute `build.cmd`. Resultado: `dist\FeatherPad.exe`.
+
+Com CMake:
 
 ```cmd
 cmake -S . -B build -A x64
 cmake --build build --config Release
+ctest --test-dir build -C Release --output-on-failure
 ```
 
-## 2. Configurar os jogos
+O runtime C++ é vinculado estaticamente; quem só usa o EXE não precisa instalar ferramentas de desenvolvimento. O executável não é assinado digitalmente.
 
-1. Clique Novo.
-2. Clique Procurar e selecione um .exe ou atalho .lnk/.url.
-3. Preencha um nome e clique Salvar.
-4. Se o jogo precisar, informe argumentos e pasta de trabalho. O caminho do executavel deve ser informado sem aspas externas. Argumentos podem conter aspas.
-5. Selecione um jogo e clique Jogar, pressione Enter ou use o controle.
+## Verificação desta entrega
 
-Tambem pode informar manualmente uma URI como `steam://rungameid/292030`. O aplicativo correspondente precisa estar instalado. Jogos de lojas podem exigir seus clientes; FeatherPad nao elimina essa exigencia. A lista nao e descoberta automaticamente.
+A versão anterior foi testada pelo usuário e funcionou no seu PC. A versão 2 foi compilada para Windows x64 por compilação cruzada com GCC/MinGW, com avisos tratados como erros. Isso verifica sintaxe, tipos, recursos e linkedição; não substitui executar no Windows.
 
-Para editar, selecione, altere e Salvar. Para criar outro, clique Novo primeiro. Remover exclui apenas a entrada da lista, apos confirmacao.
+Os testes nativos incluídos rodam pelo GitHub Actions no Windows: migração da v1, Unicode/aspas, favoritos, backup, importação e cache de imagens, abertura das janelas e captura de botões simulada. Não houve teste físico de Bluetooth/USB nem medição de RAM nesta entrega. Não afirmamos que os testes Windows passaram antes de executar o workflow no seu repositório.
 
-## 3. Usar o controle
+Depois do build, confira:
 
-Pareie o DualShock 4 ou DualSense nas configuracoes de Bluetooth do Windows, ou conecte via USB. O Windows precisa reconhecer um joystick/gamepad HID.
+1. Seus jogos antigos continuam presentes.
+2. Uma capa aparece e permanece após reiniciar o monitor, mesmo movendo a imagem original.
+3. Favoritos, nome e imagem de perfil persistem.
+4. Os quatro pop-ups de botões mostram a ação correta; cancelar não altera o cadastro e botões duplicados são rejeitados.
+5. O controle navega entre jogos e ações, abre o jogo e oculta o launcher.
+6. O monitor abre pelo botão com a janela oculta, por USB e Bluetooth.
+7. Inicialização com Windows e reconexão continuam funcionando.
+8. RAM e CPU permanecem adequadas no seu computador.
 
-Mapeamento inicial, que pode variar conforme o dispositivo:
+## Organização do código
 
-- Botao HID 13: abrir/ocultar (normalmente PS).
-- Botao HID 2: confirmar/jogar (normalmente X).
-- Botao HID 3: voltar/ocultar (normalmente circulo).
-- Direcional e eixo Y do analogico esquerdo: selecionar jogo.
+- `src/main.cpp`: inicialização, instância única e loop de mensagens.
+- `src/ui.cpp`: biblioteca, formulários, navegação e captura explícita.
+- `src/input.cpp`: eventos HID, botões e eixos.
+- `src/storage.cpp`: cadastro, migração, inicialização com Windows e execução de jogos.
+- `src/art.cpp`: leitura/conversão de capas e cache limitado.
+- `tests/smoke.cpp`: testes nativos isolados, sem alterar seu cadastro real.
+- `.github/workflows/build.yml`: compilação e verificação no Windows.
 
-Abra Configuracoes > Diagnostico dos botoes. Aperte cada botao e confira os numeros na linha inferior. Para mudar um comando, escolha Configurar botao, solte todos os botoes e pressione o desejado. Esc cancela a captura. Configure tres botoes diferentes. Nesta versao a captura aceita um botao por acao, nao combinacoes.
-
-A abertura funciona com a janela oculta. Confirmar, voltar e navegar so agem quando o launcher esta em primeiro plano. Ao iniciar um jogo, a janela e ocultada; o monitor permanece ativo. Fechar no X ou Esc oculta o launcher. Para encerrar de verdade, use Configuracoes > Encerrar monitor ou o menu do icone na bandeja.
-
-O Windows pode restringir a tomada de foco: se a janela aparecer atras, clique no icone da bandeja. FeatherPad nao intercepta nem bloqueia os botoes para outros programas. Steam Input, DS4Windows, overlays e jogos podem responder simultaneamente ao mesmo botao. Para diagnosticar duplicacao/ausencia de entradas, teste primeiro com Steam e remapeadores fechados. Nao ha suporte XInput dedicado nesta versao; controles apresentados exclusivamente como XInput podem nao ser detectados.
-
-## 4. Iniciar com o Windows
-
-Marque Configuracoes > Iniciar com Windows. O EXE deve permanecer na mesma pasta depois disso. O programa inicia oculto no proximo login. Desmarque para desativar. Nao precisa de administrador.
-
-Para abrir automaticamente ao conectar, marque tambem Abrir ao conectar controle. Por padrao isso fica desligado: conectar apenas deixa o monitor pronto para o botao de abertura.
-
-**O monitor precisa estar rodando para detectar o controle.** Ligar o controle nao inicia um processo que esteja totalmente encerrado. Por isso existe a opcao de inicializacao com Windows. Trata-se de um aplicativo da sessao do usuario, nao de um servico de sistema.
-
-## Dados e privacidade
-
-Biblioteca e configuracoes: `%LOCALAPPDATA%\FeatherPad\library.ini` (Unicode). Nao usa rede, telemetria ou conta. Para fazer backup, encerre o monitor e copie esse arquivo. Biblioteca limitada a 2000 jogos; campos limitados a 8000 caracteres, sem quebras de linha. Evite editar o INI enquanto o programa roda.
-
-Para desinstalar: desmarque Iniciar com Windows, encerre o monitor e apague a pasta do executavel. Se desejar, apague tambem a pasta de dados acima. Jogos e arquivos originais sao preservados.
-
-## Arquitetura e limites de recursos
-
-- Um unico processo e thread de interface, aguardando GetMessage.
-- Raw Input recebe notificacoes de joystick/gamepad HID, inclusive em segundo plano.
-- Descriptor HID armazenado por dispositivo; botoes e eixos lidos por HidP.
-- Sem consultas periodicas de Bluetooth e sem timer de polling. Enquanto um controle transmite entradas, ha processamento desses eventos mesmo com a janela oculta.
-- Biblioteca textual, sem imagens, animacoes ou servidor.
-- Sem forcar esvaziamento artificial do working set para aparentar menor RAM.
-- Janela e controles permanecem alocados quando ocultos para reduzir complexidade e permitir reabertura rapida.
-
-DS4/DualSense sao alvos de compatibilidade, mas a leitura depende do descriptor HID exposto pelo Windows. USB, Bluetooth, replicas, firmware e remapeadores podem produzir resultados diferentes. O diagnostico e necessario antes de afirmar compatibilidade no seu computador. Nao modifica drivers, nao envia comandos ao controle e nao inicializa Bluetooth por conta propria.
-
-## Roteiro de validacao no seu PC
-
-1. Compile e abra. Cadastre primeiro o Bloco de Notas (`C:\Windows\System32\notepad.exe`) como jogo de teste; confirme abertura com Enter.
-2. Feche e reabra o monitor: confirme que cadastro e argumentos permanecem.
-3. Conecte o controle por USB; use Diagnostico, configure abertura/confirmar/voltar e teste navegacao.
-4. Repita por Bluetooth. Desconecte e reconecte, confira o botao de abertura com o launcher oculto.
-5. Cadastre um jogo real. Confirme o inicio e a ocultacao da janela; confira que a navegacao nao interfere no jogo.
-6. Ative Iniciar com Windows e reinicie a sessao. Confira o icone e abertura pelo controle. Teste tambem Abrir ao conectar.
-7. Tente abrir o EXE duas vezes: apenas uma instancia deve permanecer.
-8. No Gerenciador de Tarefas, observe FeatherPad.exe apos um minuto com janela aberta, oculta, controle desconectado e jogo rodando. Registre memoria e CPU. Para avaliar o teto, confira tambem tamanho de confirmacao/bytes privados no Monitor de Recursos: working set e memoria privada sao metricas diferentes.
-9. Teste falha: caminho inexistente deve exibir erro e manter o launcher aberto.
-10. Teste Encerrar monitor: o processo deve desaparecer e deixar de reagir ao controle.
-
-Se ultrapassar 50 MB no seu PC, envie as medicoes, versao do Windows e modo de conexao. Nao ha medicao real nesta entrega.
-
-## Fontes tecnicas
-
-- https://learn.microsoft.com/en-us/windows/win32/inputdev/raw-input
-- https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/interpreting-hid-reports
-- https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/hidpi/nf-hidpi-hidp_getusagevalue
+Referências técnicas: [Raw Input](https://learn.microsoft.com/en-us/windows/win32/inputdev/raw-input), [HID](https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/interpreting-hid-reports) e [WIC Bitmap Scaler](https://learn.microsoft.com/en-us/windows/win32/api/wincodec/nn-wincodec-iwicbitmapscaler).
