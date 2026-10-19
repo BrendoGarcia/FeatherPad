@@ -20,11 +20,16 @@ int runSelfTest() {
  const std::wstring legacy=L"\ufeff[Settings]\r\nOpen=13\r\nConfirm=2\r\nBack=3\r\n[Games]\r\nCount=1\r\n[Game0]\r\nName=Legacy Game\r\nPath=C:\\Games\\Test.exe\r\nArgs=\"--name \\\"old\\\"\"\r\nDir=C:\\Games\r\n";
  check(writeBytes(ini,legacy.data(),static_cast<DWORD>(legacy.size()*sizeof(wchar_t))),"write isolated v1 fixture");
  loadDatabase();check(games.size()==1&&games[0].name==L"Legacy Game"&&games[0].path==L"C:\\Games\\Test.exe","load v1 library without loss");
+ check(!controllerCompatibility&&defaultControllerMode==ControllerMode::Xbox&&(games.empty()||games[0].controllerMode==ControllerMode::Auto),"legacy libraries do not enable emulation or lose games during upgrade");
  if(games.empty()){cleanup(dataFolder);return 1;}
  check(profileName==L"Jogador"&&!games[0].favorite&&games[0].cover.empty(),"new fields default safely during upgrade");
  games[0].args=L"--name \"a b\"";games[0].note=L"Ação, aventura e exploração";games[0].favorite=true;profileName=L"Brendo \"Player\"";
  check(saveDatabase(),"atomic v2 database write");loadDatabase();
  check(games.size()==1&&games[0].favorite&&games[0].args==L"--name \"a b\""&&profileName==L"Brendo \"Player\"","Unicode, quotes and favorites round trip");
+ games[0].controllerMode=ControllerMode::PlayStation;defaultControllerMode=ControllerMode::PlayStation;controllerCompatibility=true;preferredControllerGuid=L"test-controller-guid";
+ check(saveDatabase(),"write controller compatibility preferences");loadDatabase();
+ check(controllerCompatibility&&defaultControllerMode==ControllerMode::PlayStation&&games[0].controllerMode==ControllerMode::PlayStation&&preferredControllerGuid==L"test-controller-guid","global and per-game controller choices survive restart");
+ controllerCompatibility=false;defaultControllerMode=ControllerMode::Xbox;preferredControllerGuid.clear();
  check(GetFileAttributesW((ini+L".backup").c_str())!=INVALID_FILE_ATTRIBUTES,"pre-upgrade database backup exists");
  Game second;second.name=L"Second Game";second.path=L"C:\\Games\\Second.exe";games.push_back(second);
  setFilter(true);check(visibleGames.size()==1&&selection==0,"favorites filter preserves game identity");
@@ -89,6 +94,8 @@ int runSelfTest() {
  check(!panel&&games[0].name==L"Edited through native UI","native game editor saves and closes");
  openPage(Page::Diagnostic);controllerButtons(fake,{2,3},{});
  check(textOf(GetDlgItem(panel,420)).find(L"2")!=std::wstring::npos,"diagnostic shows inputs without rebinding");closePanel();
+ openPage(Page::Compatibility);check(GetDlgItem(panel,A_COMPAT_TOGGLE)!=nullptr&&GetDlgItem(panel,A_COMPAT_DEFAULT)!=nullptr,"controller compatibility panel exposes activation and default format");closePanel();
+ failed+=controllerStateSelfTest(log);failed+=bridgeSelfTest(log);
  clearArt();cleanup(dataFolder);log+="\nFailures: "+std::to_string(failed)+"\n";
  writeBytes(L"self-test.log",log.data(),static_cast<DWORD>(log.size()));return failed?1:0;
 }

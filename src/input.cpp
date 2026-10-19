@@ -10,6 +10,8 @@ Device* deviceFor(HANDLE handle) {
  if(HidP_GetCaps(pp,&caps)!=HIDP_STATUS_SUCCESS||caps.UsagePage!=1||(caps.Usage!=4&&caps.Usage!=5))return nullptr;
  USHORT count=caps.NumberInputValueCaps;d.values.resize(count);
  if(count&&HidP_GetValueCaps(HidP_Input,d.values.data(),&count,pp)!=HIDP_STATUS_SUCCESS)d.values.clear();else d.values.resize(count);
+ UINT pathSize=0;GetRawInputDeviceInfoW(handle,RIDI_DEVICENAME,nullptr,&pathSize);
+ if(pathSize&&pathSize<32768){std::wstring path(pathSize,L'\0');if(GetRawInputDeviceInfoW(handle,RIDI_DEVICENAME,&path[0],&pathSize)!=static_cast<UINT>(-1)&&isVirtualBusPath(path))return nullptr;}
  auto entry=devices.emplace(handle,std::move(d));
  status(L"Controle conectado. Sua biblioteca está pronta.");return &entry.first->second;
 }
@@ -55,6 +57,9 @@ namespace {
  }
 }
 void rawInput(LPARAM l) {
+ // SDL owns standardized launcher navigation while compatibility is enabled.
+ // Never process its physical device twice or consume generated virtual pads.
+ if(bridgeOwnsUI())return;
  UINT n=0;
  if(GetRawInputData(reinterpret_cast<HRAWINPUT>(l),RID_INPUT,nullptr,&n,sizeof(RAWINPUTHEADER))==static_cast<UINT>(-1)||n<sizeof(RAWINPUTHEADER)||n>1024*1024)return;
  std::vector<BYTE> buffer(n);

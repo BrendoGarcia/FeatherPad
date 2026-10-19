@@ -8,6 +8,9 @@ namespace {
  HBRUSH bgBrush=nullptr,inputBrush=nullptr;
  HWND fields[6]{},profileField=nullptr,profilePathField=nullptr;
  bool favoriteDraft=false;
+ HWND gameModeCombo=nullptr,defaultModeCombo=nullptr,sourceCombo=nullptr;
+ std::wstring sourceSignature;
+ std::vector<std::wstring> sourceGuids;
  int hovered=-1;
  std::wstring editingCover;
  int px(int x) {return x;} // Logical canvas: Windows scales it on high-DPI screens.
@@ -103,6 +106,8 @@ namespace {
  void saveEditor() {
   Game g;g.name=textOf(fields[0]);g.path=textOf(fields[1]);g.args=textOf(fields[2]);g.dir=textOf(fields[3]);g.note=textOf(fields[4]);g.cover=editingCover;
   g.favorite=favoriteDraft;
+  const auto chosen=SendMessageW(gameModeCombo,CB_GETCURSEL,0,0);
+  g.controllerMode=chosen>=0&&chosen<=3?static_cast<ControllerMode>(chosen):ControllerMode::Auto;
   if(g.name.empty()||g.path.empty()){MessageBoxW(panel,L"Preencha o nome e escolha o executável ou atalho do jogo.",L"Faltam informações",MB_ICONINFORMATION);return;}
   for(const auto* s:{&g.name,&g.path,&g.args,&g.dir,&g.note,&g.cover})if(!validField(*s)){MessageBoxW(panel,L"Os campos não podem conter quebras de linha nem ultrapassar 8000 caracteres.",L"Confira os campos",MB_ICONWARNING);return;}
   if(g.path.front()==L'"'||g.path.back()==L'"'){MessageBoxW(panel,L"Informe o caminho do jogo sem aspas externas. Use aspas somente nos argumentos, se necessário.",L"Confira o caminho",MB_ICONWARNING);return;}
@@ -137,12 +142,13 @@ void destroyTheme(){for(HFONT f:{smallFont,bodyFont,mediumFont,titleFont,heroFon
 void darkTitle(HWND h){BOOL dark=TRUE;DwmSetWindowAttribute(h,20,&dark,sizeof(dark));DwmSetWindowAttribute(h,19,&dark,sizeof(dark));}
 void status(const std::wstring& message){notice=message;if(win&&IsWindowVisible(win))InvalidateRect(win,nullptr,FALSE);}
 void show(){
+ bridgeSuspendForUI();
  // SW_RESTORE also unmaximizes a visible window. Only restore minimized ones;
  // SW_SHOW keeps both maximized geometry and the user's normal window size.
  ShowWindow(win,IsIconic(win)?SW_RESTORE:SW_SHOW);
  SetForegroundWindow(win);SetFocus(captureWin?captureWin:(panel?panel:win));InvalidateRect(win,nullptr,FALSE);
 }
-void hide(){if(panel||captureWin)return;ShowWindow(win,SW_HIDE);clearArt();}
+void hide(){if(panel||captureWin)return;bridgeSuspendForUI();ShowWindow(win,SW_HIDE);clearArt();}
 
 void paintMain(HDC dc,RECT client) {
  const int w=client.right,h=client.bottom;hits.clear();
@@ -169,7 +175,7 @@ void paintMain(HDC dc,RECT client) {
  const int x=242,cw=w-x-34;
  label(dc,L"BIBLIOTECA PESSOAL",box(x,25,cw-250,22),smallFont,accent);
  label(dc,L"Hora de jogar.",box(x,55,cw-250,52),heroFont);
- const bool connected=!devices.empty();
+ const bool connected=!devices.empty()||bridgeOwnsUI();
  round(dc,box(w-250,30,216,34),surface);
  label(dc,connected?L"●  Controle conectado":L"○  Conecte seu controle",box(w-240,30,196,34),smallFont,connected?accent:muted);
  const int heroY=130,heroH=230;
@@ -217,9 +223,9 @@ void paintMain(HDC dc,RECT client) {
  label(dc,notice.empty()?L"Seu launcher pessoal. Sem distrações.":notice,box(x,h-23,cw,18),smallFont,muted);
 }
 void drawButton(const DRAWITEMSTRUCT* item) {
- const bool toggle=item->CtlID==A_STARTUP||item->CtlID==A_AUTOOPEN||item->CtlID==A_DRAFT_FAVORITE;
+ const bool toggle=item->CtlID==A_STARTUP||item->CtlID==A_AUTOOPEN||item->CtlID==A_DRAFT_FAVORITE||item->CtlID==A_COMPAT_TOGGLE;
  if(toggle) {
-  const bool checked=item->CtlID==A_STARTUP?startupEnabled():item->CtlID==A_AUTOOPEN?autoOpen:favoriteDraft;
+  const bool checked=item->CtlID==A_STARTUP?startupEnabled():item->CtlID==A_AUTOOPEN?autoOpen:item->CtlID==A_COMPAT_TOGGLE?controllerCompatibility:favoriteDraft;
   round(item->hDC,item->rcItem,surface,CLR_INVALID,8);
   const int middle=(item->rcItem.top+item->rcItem.bottom)/2;
   RECT mark=box(item->rcItem.left+10,middle-9,18,18);
@@ -241,8 +247,8 @@ void drawButton(const DRAWITEMSTRUCT* item) {
 void openPage(Page requested,int gameIndex) {
  if(panel){SetForegroundWindow(captureWin?captureWin:panel);return;}
  show();page=requested;editorIndex=gameIndex;std::fill(std::begin(fields),std::end(fields),nullptr);
- const wchar_t* title=requested==Page::Editor?(gameIndex<0?L"Adicionar jogo":L"Editar jogo"):requested==Page::Profile?L"Seu perfil":requested==Page::Diagnostic?L"Diagnóstico do controle":L"Configurações";
- const int height=requested==Page::Editor?650:requested==Page::Profile?340:requested==Page::Diagnostic?300:570;
+ const wchar_t* title=requested==Page::Editor?(gameIndex<0?L"Adicionar jogo":L"Editar jogo"):requested==Page::Profile?L"Seu perfil":requested==Page::Diagnostic?L"Diagnóstico do controle":requested==Page::Compatibility?L"Compatibilidade dos jogos":L"Configurações";
+ const int height=requested==Page::Editor?700:requested==Page::Profile?340:requested==Page::Diagnostic?300:requested==Page::Compatibility?580:640;
  panel=ownedWindow(L"FeatherPadPanel",title,650,height,win);if(!panel){page=Page::None;return;}
  EnableWindow(win,FALSE);
  if(requested==Page::Editor) {
@@ -256,9 +262,13 @@ void openPage(Page requested,int gameIndex) {
   fields[5]=control(panel,L"EDIT",editingCover.empty()?L"Sem capa — será usada uma arte com o nome do jogo":editingCover,WS_BORDER|ES_AUTOHSCROLL|ES_READONLY,box(26,464,598,30),405);
   nativeButton(panel,L"Escolher capa...",box(26,504,160,33),A_BROWSE_COVER);nativeButton(panel,L"Remover capa",box(198,504,148,33),A_CLEAR_COVER);
   favoriteDraft=g.favorite;nativeButton(panel,L"Adicionar aos favoritos",box(365,504,259,33),A_DRAFT_FAVORITE);
-  staticText(panel,L"A imagem é copiada para o perfil e reduzida ao carregar. Não precisa ficar na pasta original.",box(26,548,598,36));
-  if(gameIndex>=0)nativeButton(panel,L"Excluir da lista",box(26,600,148,34),A_DELETE_GAME);
-  nativeButton(panel,L"Cancelar",box(350,600,124,34),A_CLOSE_PANEL);nativeButton(panel,L"Salvar jogo",box(486,600,138,34),A_SAVE_GAME);
+  staticText(panel,L"Controle para este jogo",box(26,552,204,24));
+  gameModeCombo=control(panel,L"COMBOBOX",L"",WS_TABSTOP|CBS_DROPDOWNLIST|WS_VSCROLL,box(242,548,382,150),440);
+  for(const wchar_t* text:{L"Usar padrão global",L"Nativo — sem conversão",L"Xbox 360 virtual",L"PlayStation 4 virtual"})SendMessageW(gameModeCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(text));
+  SendMessageW(gameModeCombo,CB_SETCURSEL,static_cast<WPARAM>(g.controllerMode),0);
+  staticText(panel,L"O padrão é aplicado sem configurar cada jogo. Ative a compatibilidade nas configurações. A capa é copiada para o perfil.",box(26,586,598,44));
+  if(gameIndex>=0)nativeButton(panel,L"Excluir da lista",box(26,648,148,34),A_DELETE_GAME);
+  nativeButton(panel,L"Cancelar",box(350,648,124,34),A_CLOSE_PANEL);nativeButton(panel,L"Salvar jogo",box(486,648,138,34),A_SAVE_GAME);
  } else if(requested==Page::Settings) {
   staticText(panel,L"CONTROLE",box(26,20,598,24));
   staticText(panel,L"Escolha uma ação. Um pop-up vai aguardar o botão que você quiser usar.",box(26,52,598,42));
@@ -266,10 +276,28 @@ void openPage(Page requested,int gameIndex) {
   const unsigned bindings[]={openButton,okButton,backButton,starButton};
   for(int i=0;i<4;++i){const int y=106+i*58;staticText(panel,labels[i],box(26,y,306,34));nativeButton(panel,L"Botão "+std::to_wstring(bindings[i])+L"  ·  Alterar",box(350,y,274,34),A_CAPTURE_OPEN+i);}
   nativeButton(panel,L"Testar os botões do controle",box(26,346,598,35),A_DIAG);
-  nativeButton(panel,L"Iniciar com o Windows (em segundo plano)",box(26,409,598,28),A_STARTUP);
-  nativeButton(panel,L"Mostrar a biblioteca ao conectar o controle",box(26,445,598,28),A_AUTOOPEN);
-  staticText(panel,L"O monitor precisa estar ativo. Fechar a janela mantém o ícone na bandeja do Windows.",box(26,485,440,54));
-  nativeButton(panel,L"Concluir",box(486,518,138,34),A_CLOSE_PANEL);
+  nativeButton(panel,L"Compatibilidade dos jogos...",box(26,393,598,35),A_COMPAT);
+  nativeButton(panel,L"Iniciar com o Windows (em segundo plano)",box(26,449,598,28),A_STARTUP);
+  nativeButton(panel,L"Mostrar a biblioteca ao conectar o controle",box(26,485,598,28),A_AUTOOPEN);
+  staticText(panel,L"O monitor precisa estar ativo. Fechar a janela mantém o ícone na bandeja do Windows.",box(26,525,440,54));
+  nativeButton(panel,L"Concluir",box(486,590,138,34),A_CLOSE_PANEL);
+ } else if(requested==Page::Compatibility) {
+  staticText(panel,L"Seu controle físico pode aparecer para os jogos como Xbox ou PlayStation. Você escolhe um padrão; exceções ficam salvas no jogo.",box(26,22,598,48));
+  nativeButton(panel,L"Ativar compatibilidade de controles",box(26,82,598,38),A_COMPAT_TOGGLE);
+  control(panel,L"STATIC",bridgeStatus(),0,box(26,138,598,68),430);
+  staticText(panel,L"Controle de origem (um jogador)",box(26,222,598,22));
+  sourceCombo=control(panel,L"COMBOBOX",L"",WS_TABSTOP|CBS_DROPDOWNLIST|WS_VSCROLL,box(26,250,598,150),A_COMPAT_SOURCE);
+  staticText(panel,L"Formato padrão enviado aos jogos",box(26,298,598,22));
+  defaultModeCombo=control(panel,L"COMBOBOX",L"",WS_TABSTOP|CBS_DROPDOWNLIST|WS_VSCROLL,box(26,326,598,150),A_COMPAT_DEFAULT);
+  for(const wchar_t* text:{L"Nativo — usa o controle físico",L"Xbox 360 — compatibilidade XInput",L"PlayStation 4 — DualShock 4 virtual"})SendMessageW(defaultModeCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(text));
+  SendMessageW(defaultModeCombo,CB_SETCURSEL,static_cast<int>(defaultControllerMode)-1,0);
+  nativeButton(panel,L"Verificar novamente",box(26,389,190,34),A_COMPAT_RETRY);
+  nativeButton(panel,L"Driver necessário",box(228,389,190,34),A_COMPAT_DRIVER);
+  nativeButton(panel,L"Evitar entrada dupla",box(430,389,194,34),A_COMPAT_HIDHIDE);
+  nativeButton(panel,L"Importar mapeamentos SDL...",box(26,438,300,34),A_COMPAT_MAPPINGS);
+  staticText(panel,L"Saídas virtuais exigem ViGEmBus 1.22.0 (projeto aposentado). Instalação única pelo link oficial. Recursos avançados de DualSense não são emulados.",box(26,492,430,70));
+  nativeButton(panel,L"Concluir",box(486,530,138,34),A_CLOSE_PANEL);
+  sourceSignature.clear();refreshBridgePanel();
  } else if(requested==Page::Profile) {
   staticText(panel,L"Seu perfil fica somente neste computador. Sem conta ou login.",box(26,24,598,28));
   staticText(panel,L"Como você quer aparecer?",box(26,76,598,22));profileField=edit(panel,profileName,box(26,105,598,32),410,40);
@@ -322,6 +350,7 @@ void action(int id) {
  case A_OPEN:show();break;
  case A_EXIT:if(panel)closePanel();DestroyWindow(win);break;
  case A_SETTINGS:openPage(Page::Settings);break;
+ case A_COMPAT:closePanel();openPage(Page::Compatibility);break;
  case A_ALL:setFilter(false);break;case A_FAVORITES:setFilter(true);break;
  case A_ADD:openPage(Page::Editor);break;
  case A_EDIT:if(selection>=0)openPage(Page::Editor,selection);break;
@@ -344,6 +373,34 @@ void action(int id) {
  case A_CAPTURE_OPEN:case A_CAPTURE_OK:case A_CAPTURE_BACK:case A_CAPTURE_STAR:beginCapture(id);break;
  case A_CAPTURE_SAVE:commitCapture();break;case A_CAPTURE_CANCEL:closeCapture();break;
  case A_DIAG:closePanel();openPage(Page::Diagnostic);break;
+ case A_COMPAT_TOGGLE: {
+  controllerCompatibility=!controllerCompatibility;
+  if(!saveDatabase(panel))controllerCompatibility=!controllerCompatibility;
+  bridgeReconfigure();InvalidateRect(GetDlgItem(panel,A_COMPAT_TOGGLE),nullptr,FALSE);refreshBridgePanel();break;
+ }
+ case A_COMPAT_RETRY:bridgeReconfigure();refreshBridgePanel();break;
+ case A_COMPAT_DRIVER:ShellExecuteW(panel,L"open",L"https://github.com/nefarius/ViGEmBus/releases/tag/v1.22.0",nullptr,nullptr,SW_SHOWNORMAL);break;
+ case A_COMPAT_HIDHIDE:ShellExecuteW(panel,L"open",L"https://docs.nefarius.at/projects/HidHide/Simple-Setup-Guide/",nullptr,nullptr,SW_SHOWNORMAL);break;
+ case A_COMPAT_DEFAULT: {
+  const auto selected=SendMessageW(defaultModeCombo,CB_GETCURSEL,0,0);if(selected<0||selected>2)break;
+  const auto old=defaultControllerMode;defaultControllerMode=static_cast<ControllerMode>(selected+1);
+  if(!saveDatabase(panel)){defaultControllerMode=old;SendMessageW(defaultModeCombo,CB_SETCURSEL,static_cast<int>(old)-1,0);}bridgeReconfigure();break;
+ }
+ case A_COMPAT_SOURCE: {
+  const auto selected=SendMessageW(sourceCombo,CB_GETCURSEL,0,0);if(selected<0||selected>=static_cast<LRESULT>(sourceGuids.size()))break;
+  const auto old=preferredControllerGuid;preferredControllerGuid=sourceGuids[static_cast<size_t>(selected)];
+  if(!saveDatabase(panel))preferredControllerGuid=old;
+  bridgeReconfigure();refreshBridgePanel();break;
+ }
+ case A_COMPAT_MAPPINGS: {
+  wchar_t file[32768]{};OPENFILENAMEW of{};of.lStructSize=sizeof(of);of.hwndOwner=panel;of.lpstrFile=file;of.nMaxFile=32768;of.lpstrFilter=L"Mapeamentos SDL (texto)\0*.txt\0\0";of.Flags=OFN_FILEMUSTEXIST|OFN_NOCHANGEDIR;
+  if(!GetOpenFileNameW(&of))break;
+  WIN32_FILE_ATTRIBUTE_DATA info{};if(!GetFileAttributesExW(file,GetFileExInfoStandard,&info)||info.nFileSizeHigh||info.nFileSizeLow>4*1024*1024){MessageBoxW(panel,L"Escolha um arquivo de mapeamentos SDL em texto, de até 4 MB.",L"Confira o arquivo",MB_ICONWARNING);break;}
+  const auto destination=dataFolder+L"\\gamecontrollerdb.txt";
+  if(lstrcmpiW(file,destination.c_str())!=0&&!CopyFileW(file,destination.c_str(),FALSE)){MessageBoxW(panel,L"Não foi possível importar o arquivo.",L"FeatherPad",MB_ICONERROR);break;}
+  bridgeReconfigure();refreshBridgePanel();break;
+ }
+
  case A_SAVE_PROFILE: {
   const auto name=textOf(profileField);if(name.empty()||!validField(name,40)){MessageBoxW(panel,L"Informe um nome de 1 a 40 caracteres, sem quebras de linha.",L"Confira o nome",MB_ICONINFORMATION);break;}
   auto image=editingCover;if(image!=avatarPath&&!importArt(image,panel))break;
@@ -364,9 +421,10 @@ LRESULT CALLBACK panelProc(HWND h,UINT m,WPARAM w,LPARAM l) {
  case WM_ERASEBKGND:return 1;
  case WM_PAINT:{PAINTSTRUCT ps{};HDC dc=BeginPaint(h,&ps);RECT r{};GetClientRect(h,&r);fill(dc,r,bg);EndPaint(h,&ps);return 0;}
  case WM_CTLCOLORSTATIC:case WM_CTLCOLORBTN:SetTextColor(reinterpret_cast<HDC>(w),white);SetBkColor(reinterpret_cast<HDC>(w),bg);return reinterpret_cast<LRESULT>(bgBrush);
+ case WM_CTLCOLORLISTBOX:SetTextColor(reinterpret_cast<HDC>(w),white);SetBkColor(reinterpret_cast<HDC>(w),surface);return reinterpret_cast<LRESULT>(inputBrush);
  case WM_CTLCOLOREDIT:SetTextColor(reinterpret_cast<HDC>(w),white);SetBkColor(reinterpret_cast<HDC>(w),surface);return reinterpret_cast<LRESULT>(inputBrush);
  case WM_DRAWITEM:drawButton(reinterpret_cast<const DRAWITEMSTRUCT*>(l));return TRUE;
- case WM_COMMAND:if(HIWORD(w)==BN_CLICKED)action(LOWORD(w));return 0;
+ case WM_COMMAND:if(HIWORD(w)==BN_CLICKED||HIWORD(w)==CBN_SELCHANGE)action(LOWORD(w));return 0;
  case WM_CLOSE:closePanel();return 0;
  }
  return DefWindowProcW(h,m,w,l);
@@ -404,13 +462,14 @@ LRESULT CALLBACK windowProc(HWND h,UINT m,WPARAM w,LPARAM l) {
   for(size_t i=0;i<hits.size();++i)if(PtInRect(&hits[i].r,p)){index=static_cast<int>(i);break;}
   if(index!=hovered){hovered=index;InvalidateRect(h,nullptr,FALSE);}SetCursor(LoadCursorW(nullptr,index<0?IDC_ARROW:IDC_HAND));return 0; }
  case WM_MOUSEWHEEL:moveSelection(GET_WHEEL_DELTA_WPARAM(w)>0?-1:1);return 0;
+ case WM_TIMER:if(w==GAMEPAD_TIMER){bridgeTick();return 0;}break;
  case WM_INPUT:rawInput(l);return DefWindowProcW(h,m,w,l);
  case WM_INPUT_DEVICE_CHANGE:deviceChange(w,l);return 0;
  case WM_COMMAND:action(LOWORD(w));return 0;
  case FINISH_CAPTURE:commitCapture();return 0;
  case WM_CLOSE:hide();return 0;
  case TRAY:if(l==WM_LBUTTONUP)show();else if(l==WM_RBUTTONUP)trayMenu();return 0;
- case WM_DESTROY:clearArt();Shell_NotifyIconW(NIM_DELETE,&tray);PostQuitMessage(0);return 0;
+ case WM_DESTROY:bridgeShutdown();clearArt();Shell_NotifyIconW(NIM_DELETE,&tray);PostQuitMessage(0);return 0;
  }
  return DefWindowProcW(h,m,w,l);
 }
@@ -504,4 +563,17 @@ void controllerButtons(HANDLE h,const std::set<USAGE>& now,const std::set<USAGE>
    if(b==okButton){activateMain();return;}if(b==backButton){hide();return;}if(b==starButton){toggleFavorite();return;}
   }
  }
+}
+
+void refreshBridgePanel() {
+ if(!panel||page!=Page::Compatibility)return;
+ HWND label=GetDlgItem(panel,430);const auto value=bridgeStatus();if(textOf(label)!=value)SetWindowTextW(label,value.c_str());
+ const auto current=bridgeSources();std::wstring signature=preferredControllerGuid;
+ for(const auto& entry:current)signature+=L"|"+entry.guid+L":"+entry.name;
+ if(signature==sourceSignature&&SendMessageW(sourceCombo,CB_GETCOUNT,0,0)>0)return;
+ sourceSignature=signature;sourceGuids.clear();sourceGuids.push_back(L"");
+ SendMessageW(sourceCombo,CB_RESETCONTENT,0,0);SendMessageW(sourceCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Automático — primeiro controle reconhecido"));int selected=0;
+ for(const auto& entry:current){SendMessageW(sourceCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(entry.name.c_str()));sourceGuids.push_back(entry.guid);if(entry.guid==preferredControllerGuid)selected=static_cast<int>(sourceGuids.size())-1;}
+ if(!preferredControllerGuid.empty()&&!selected){SendMessageW(sourceCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Controle preferido (desconectado)"));sourceGuids.push_back(preferredControllerGuid);selected=static_cast<int>(sourceGuids.size())-1;}
+ SendMessageW(sourceCombo,CB_SETCURSEL,selected,0);
 }

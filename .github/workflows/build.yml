@@ -14,7 +14,7 @@ jobs:
         run: cmake -S . -B build -A x64
       - name: Compile native launcher
         run: cmake --build build --config Release
-      - name: Verify migration, artwork, dialogs and button capture
+      - name: Verify migration, artwork, focus and controller translation
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Include instructions
         run: Copy-Item LEIA-ME.md build/Release/LEIA-ME.md
@@ -23,6 +23,8 @@ jobs:
           name: FeatherPad-Windows-x64
           path: |
             build/Release/FeatherPad.exe
+            build/Release/SDL3.dll
+            build/Release/licenses/
             build/Release/LEIA-ME.md
       - name: Test report
         if: always()

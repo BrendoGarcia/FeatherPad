@@ -1,6 +1,74 @@
-# FeatherPad 2 — sua biblioteca de jogos
+# FeatherPad 2.1 — sua biblioteca de jogos
 
 Launcher nativo para Windows x64, escrito em C++17 e Win32. Sem navegador, Electron, Java, Python, conta ou conexão com a internet em tempo de execução.
+
+## Compatibilidade de controles nos jogos (2.1)
+
+**Esta versão acrescenta conversão de controles; não é uma promessa de compatibilidade universal.** O controle físico é lido pela SDL e pode aparecer para o jogo como Xbox 360, PlayStation 4 (DualShock 4) ou continuar no modo nativo. Não é necessário manter Steam ou DS4Windows aberto.
+
+### Ativação única
+
+1. Baixe **FeatherPad-Windows-x64** no GitHub Actions e extraia **todos os arquivos**, incluindo `SDL3.dll`, para a pasta do launcher. Encerre o monitor antigo antes de substituir os arquivos.
+2. Abra **Configurações > Compatibilidade dos jogos**.
+3. Para saídas virtuais, use **Driver necessário** para abrir a página oficial do **ViGEmBus 1.22.0**. Instale o driver uma vez com permissão de administrador; reinicie o Windows se o instalador pedir. O launcher não instala drivers silenciosamente nem baixa executáveis em segundo plano.
+4. Volte ao launcher e ative **Ativar compatibilidade de controles**. Se já estava ativado, clique **Verificar novamente** após a instalação.
+5. Escolha o formato padrão: Xbox 360, PlayStation 4 ou Nativo. Xbox 360 é o padrão inicial porque oferece uma saída XInput comum em jogos de PC; isso não significa detectar automaticamente a API de todos os jogos.
+6. Mantenha **Controle de origem: Automático**, ou selecione um controle reconhecido. Esta versão converte **um controle/jogador por vez**.
+7. Confira a mensagem: ela deve indicar o formato virtual ativo e o nome do controle de origem. Inicie o jogo depois disso. Em `joy.cpl`, o controle virtual deve aparecer quando o modo estiver ativo.
+
+A função vem desativada na atualização, preservando o comportamento anterior. A preferência é salva; depois da ativação você não precisa repetir o processo a cada jogo. Em modo Nativo a SDL continua disponível para navegação, mas nenhum dispositivo virtual é criado e o ViGEmBus não é necessário.
+
+### Formatos diferentes por jogo
+
+Todos os jogos antigos e novos começam em **Usar padrão global**. A maioria pode ser aberta assim, sem configuração individual. Se um jogo específico exigir outro formato, use **Editar > Controle para este jogo** e selecione:
+
+| Opção | Comportamento |
+|---|---|
+| Usar padrão global | Usa o formato escolhido nas configurações do launcher. |
+| Nativo — sem conversão | Remove a saída virtual e deixa o jogo usar diretamente o controle físico. |
+| Xbox 360 virtual | Converte as entradas do controle reconhecido em XInput. |
+| PlayStation 4 virtual | Converte as mesmas entradas em um DualShock 4 virtual. |
+
+A preferência fica salva no cadastro desse jogo e é aplicada antes de abri-lo. O último formato aplicado permanece até o próximo jogo ou uma nova configuração global; o launcher não tenta adivinhar quando clientes externos/atalhos encerram o jogo.
+
+**Não há detecção universal do formato aceito por um executável.** Criar Xbox e PlayStation ao mesmo tempo causaria ambiguidades e entradas duplicadas; esta versão usa somente uma saída virtual por vez. Ela não altera menus internos do jogo, não cria suporte onde o jogo não tem suporte a gamepad e não obriga um jogo a trocar de teclado/mouse para controle.
+
+### Controles reconhecidos
+
+A entrada usa **SDL 3.4.18**, com seus perfis padronizados para controles compatíveis de Xbox, PlayStation, Switch e outros fabricantes, por USB/Bluetooth conforme o dispositivo/driver. Isso amplia o suporte, mas não cobre literalmente todo hardware existente. Controles desconhecidos podem precisar de um mapeamento inicial.
+
+Use **Importar mapeamentos SDL...** para um arquivo `gamecontrollerdb.txt` compatível. Ele é copiado para `%LOCALAPPDATA%\FeatherPad\gamecontrollerdb.txt` e lido na próxima inicialização da camada de controles. A importação não executa código. Um mapeamento descreve o controle físico e vale para todos os jogos; não precisa ser refeito em cada jogo. A lista de origem mostra os dispositivos que a SDL reconhece como gamepads; um joystick sem perfil pode não aparecer até importar um mapeamento adequado.
+
+Com a compatibilidade ativada, a navegação usa botões padronizados: 1=Oeste/quadrado, 2=Sul/X/A, 3=Leste/círculo/B, 4=Norte/triângulo/Y, 5/6=ombros, 7/8=gatilhos, 9=Back/Share, 10=Start/Options, 11/12=cliques dos analógicos, 13=Guide/PS, 14=touchpad. Os números são posições padronizadas, não necessariamente os números HID de uma réplica. Se algum atalho personalizado antigo mudar, configure-o uma vez pelos pop-ups. O botão Guide/PS é reservado para o launcher e não é enviado à saída virtual.
+
+Controles do mesmo modelo podem compartilhar o mesmo GUID; quando há dois iguais, a preferência de origem escolhe o primeiro disponível. Multiplayer e escolha por número de série não estão implementados nesta versão.
+
+### Evitar comandos duplicados
+
+O jogo pode enxergar o controle físico e o virtual simultaneamente. Em jogos que aceitam os dois, isso pode gerar duas entradas. O botão **Evitar entrada dupla** abre a documentação oficial do **HidHide**, um filtro opcional separado. Sua configuração é única por controle:
+
+- Inclua o caminho do `FeatherPad.exe` na lista de aplicativos permitidos do HidHide.
+- Selecione apenas o controle **físico** para ocultar dos demais aplicativos e ative a ocultação.
+- Deixe o controle virtual visível. Se usar Nativo em algum jogo, desative a ocultação física para esse uso; o launcher não altera automaticamente o HidHide.
+
+Não há ocultação automática neste projeto. Feche Steam Input/DS4Windows durante o primeiro teste para não criar duas camadas de conversão. Dispositivos do barramento ViGEm são excluídos das origens do launcher para impedir realimentação. A opção Nativo não suprime os comandos do dispositivo físico quando a biblioteca está aberta.
+
+### Limites e dependências
+
+- ViGEmBus e ViGEmClient são projetos **aposentados**, sem manutenção futura. A dependência é opcional e explícita. A versão oficial 1.22.0 removeu o atualizador legado; não use antigos atualizadores/domínios. Fontes: [fim de vida](https://docs.nefarius.at/projects/ViGEm/End-of-Life/) e [release oficial](https://github.com/nefarius/ViGEmBus/releases/tag/v1.22.0).
+- Esta integração é destinada a **Windows 10/11 x64**. Atualizações do Windows, políticas de segurança, jogos e anti-cheat podem limitar drivers/dispositivos virtuais; não há bypass de anti-cheat ou injeção de DLL no jogo.
+- A saída PlayStation é **DualShock 4**, não emulação completa de DualSense. Botões, dois analógicos, gatilhos e direcional são convertidos. Áudio do controle, gyro, touchpad como ponteiro, gatilhos adaptativos, LEDs e retorno de vibração não são encaminhados nesta versão.
+- Ao abrir a biblioteca, o controle **virtual** recebe estado neutro. Ao iniciar um jogo, aguarda botões/gatilhos e analógicos voltarem ao repouso antes de encaminhar entradas. O físico só pode ser ocultado por um filtro separado.
+- O launcher precisa continuar rodando em segundo plano durante o jogo. Desativar a compatibilidade/encerrar o monitor remove o controle virtual e libera SDL/recursos. Desconectar o controle físico remove o virtual; reconectar recria a saída.
+- Caso o driver não esteja pronto, o launcher avisa antes de abrir o jogo. Você pode cancelar para corrigir ou escolher iniciar somente com o controle físico.
+
+### Memória, build e testes
+
+A UI continua nativa Win32. SDL é somente uma biblioteca de entrada carregada sob demanda, não um navegador nem um programa separado. O backend antigo sem timer continua quando a compatibilidade está desativada. Com ela ativada, um timer pede atualização de entradas em aproximadamente 8–16 ms com controle e 250 ms sem controle; isso acrescenta CPU/RAM e precisa ser medido no seu PC. Não há garantia de manter 20–50 MB no novo modo.
+
+O GitHub Actions continua gerando o pacote. O CMake baixa dependências fixas com SHA-256 conferido: SDL 3.4.18 e ViGEmClient no commit `b66d02d57e32cc8595369c53418b843e958649b4`. O cliente ViGEm é vinculado estaticamente; `SDL3.dll` e as licenças são incluídas no artefato. O programa não faz downloads de bibliotecas em tempo de execução.
+
+Os testes verificam conversões, eixos, gatilhos, preferências persistentes e entrada SDL com um gamepad de teste local ao processo, **sem instalar driver na CI**. Isso não valida um jogo real, Bluetooth físico, a instalação do ViGEmBus ou a saída virtual vista por um jogo. Teste no seu PC primeiro com um jogo conhecido e confira o dispositivo em `joy.cpl`. O teste em hardware e a medição de RAM continuam necessários.
 
 ## O que mudou nesta versão
 
@@ -19,7 +87,7 @@ Launcher nativo para Windows x64, escrito em C++17 e Win32. Sem navegador, Elect
 3. No repositório que você já usou no GitHub, substitua os arquivos do projeto pelos desta versão. **Inclua os novos arquivos de `src`, a pasta `tests` e `.github/workflows/build.yml`**. Substituir somente `main.cpp` não basta.
 4. Mantenha `CMakeLists.txt` e as pastas `src`, `tests` e `.github` na raiz do repositório, sem uma pasta FeatherPad extra envolvendo tudo.
 5. Faça commit e push. Abra **Actions > Build Windows** e aguarde os testes e a compilação. Também pode usar **Run workflow** manualmente.
-6. Na execução verde, baixe o artefato **FeatherPad-Windows-x64**, extraia e substitua o seu executável anterior.
+6. Na execução verde, baixe o artefato **FeatherPad-Windows-x64**, extraia e substitua os arquivos do pacote, mantendo SDL3.dll ao lado do executável.
 7. Se mantiver a mesma pasta/nome do EXE, a inicialização com Windows continua apontando para o mesmo caminho. Se mudar de pasta, desative e reative essa opção.
 
 O cadastro é lido de `%LOCALAPPDATA%\FeatherPad\library.ini`, o mesmo endereço da versão anterior. Campos antigos são preservados. As capas começam vazias: edite cada jogo para adicioná-las. Na primeira gravação, o arquivo anterior é copiado para `library.ini.backup`, se esse backup ainda não existir.
@@ -120,7 +188,7 @@ Primeiro pareie o controle no Windows ou conecte por USB. FeatherPad recebe joys
 
 X, Esc e o botão de voltar ocultam a janela. Ao iniciar um jogo, ela também é ocultada e o cache de capas é liberado. Para encerrar de verdade: clique com o botão direito no ícone da bandeja e escolha **Encerrar monitor**.
 
-Controles apresentados exclusivamente como XInput ainda não têm backend dedicado. DualShock 4 e DualSense dependem do descriptor HID exposto pelo Windows. Steam Input, DS4Windows e overlays podem ocultar dispositivos ou responder ao mesmo botão. Para diagnosticar, teste primeiro sem remapeadores. O programa não bloqueia o botão PS para outros aplicativos. O Windows também pode limitar a tomada de foco; nesse caso, use o ícone da bandeja.
+Sem a compatibilidade ativada, controles apresentados exclusivamente como XInput ainda usam o backend anterior limitado. Com a compatibilidade ativada, a leitura SDL também atende controles XInput reconhecidos. DualShock 4 e DualSense dependem do descriptor HID exposto pelo Windows. Steam Input, DS4Windows e overlays podem ocultar dispositivos ou responder ao mesmo botão. Para diagnosticar, teste primeiro sem remapeadores. O programa não bloqueia o botão PS para outros aplicativos. O Windows também pode limitar a tomada de foco; nesse caso, use o ícone da bandeja.
 
 ## Leveza e limites de memória
 
@@ -147,7 +215,7 @@ Para desinstalar: desative Iniciar com o Windows, encerre o monitor e apague a p
 
 ## Compilação local opcional
 
-Com Visual Studio Build Tools, componente **Desenvolvimento para desktop com C++** e SDK do Windows, abra **x64 Native Tools Command Prompt for VS** nesta pasta e execute `build.cmd`. Resultado: `dist\FeatherPad.exe`.
+Com Visual Studio Build Tools, componente **Desenvolvimento para desktop com C++**, CMake 3.24+ e SDK do Windows, abra **x64 Native Tools Command Prompt for VS** nesta pasta e execute `build.cmd`. Resultado: `build\Release\FeatherPad.exe`, acompanhado de `SDL3.dll`.
 
 Com CMake:
 
@@ -157,11 +225,11 @@ cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
 
-O runtime C++ é vinculado estaticamente; quem só usa o EXE não precisa instalar ferramentas de desenvolvimento. O executável não é assinado digitalmente.
+O runtime C++ e o cliente ViGEm são vinculados estaticamente. Mantenha a SDL3.dll distribuída no pacote ao lado do EXE. Quem usa o programa não precisa instalar ferramentas de desenvolvimento; a conversão virtual exige o driver descrito acima. O executável não é assinado digitalmente.
 
 ## Verificação desta entrega
 
-A versão anterior foi testada pelo usuário e funcionou no seu PC. A versão 2 foi compilada para Windows x64 por compilação cruzada com GCC/MinGW, com avisos tratados como erros. Isso verifica sintaxe, tipos, recursos e linkedição; não substitui executar no Windows.
+A versão anterior foi testada pelo usuário e funcionou no seu PC. A base da versão 2 foi compilada para Windows x64 por compilação cruzada com GCC/MinGW, com avisos tratados como erros. Isso verifica sintaxe, tipos, recursos e linkedição; não substitui executar no Windows.
 
 Os testes nativos incluídos rodam pelo GitHub Actions no Windows: migração da v1, Unicode/aspas, favoritos, backup, importação e cache de imagens, abertura das janelas e captura de botões simulada. Não houve teste físico de Bluetooth/USB nem medição de RAM nesta entrega. Não afirmamos que os testes Windows passaram antes de executar o workflow no seu repositório.
 
@@ -183,6 +251,9 @@ Depois do build, confira:
 - `src/input.cpp`: eventos HID, botões e eixos.
 - `src/storage.cpp`: cadastro, migração, inicialização com Windows e execução de jogos.
 - `src/art.cpp`: leitura/conversão de capas e cache limitado.
+- `src/controller_state.cpp`: modelo independente de controle e conversões Xbox/PlayStation.
+- `src/gamepad_bridge.cpp`: entrada SDL, ciclo de vida dos controles virtuais e proteção contra realimentação.
+- `tests/controller_state_tests.cpp`: regressões da tradução de entradas.
 - `tests/smoke.cpp`: testes nativos isolados, sem alterar seu cadastro real.
 - `.github/workflows/build.yml`: compilação e verificação no Windows.
 

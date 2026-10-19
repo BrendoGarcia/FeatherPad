@@ -22,18 +22,22 @@ extern "C" {
 #include <set>
 #include <algorithm>
 #include <memory>
+#include "controller_state.h"
+#include "gamepad_bridge.h"
 
 constexpr UINT TRAY=WM_APP+1, FINISH_CAPTURE=WM_APP+2;
 enum Action {
  A_OPEN=200,A_EXIT,A_SETTINGS,A_ALL,A_FAVORITES,A_ADD,A_EDIT,A_PLAY,A_STAR,A_PROFILE,
  A_PREV,A_NEXT,A_CLOSE_PANEL,A_SAVE_GAME,A_DELETE_GAME,A_BROWSE_GAME,A_BROWSE_COVER,A_CLEAR_COVER,
  A_STARTUP,A_AUTOOPEN,A_CAPTURE_OPEN,A_CAPTURE_OK,A_CAPTURE_BACK,A_CAPTURE_STAR,A_DIAG,
- A_CAPTURE_SAVE,A_CAPTURE_CANCEL,A_SAVE_PROFILE,A_BROWSE_AVATAR,A_CLEAR_AVATAR,A_DRAFT_FAVORITE
+ A_CAPTURE_SAVE,A_CAPTURE_CANCEL,A_SAVE_PROFILE,A_BROWSE_AVATAR,A_CLEAR_AVATAR,A_DRAFT_FAVORITE,
+ A_COMPAT,A_COMPAT_TOGGLE,A_COMPAT_RETRY,A_COMPAT_DRIVER,A_COMPAT_HIDHIDE,A_COMPAT_MAPPINGS,A_COMPAT_DEFAULT,A_COMPAT_SOURCE
 };
-enum class Page { None, Editor, Settings, Profile, Diagnostic };
+enum class Page { None, Editor, Settings, Profile, Diagnostic, Compatibility };
 struct Game {
  std::wstring name,path,args,dir,cover,note;
  bool favorite=false;
+ ControllerMode controllerMode=ControllerMode::Auto;
 };
 struct Device {
  std::vector<BYTE> descriptor;

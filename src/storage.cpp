@@ -15,6 +15,10 @@ bool validField(const std::wstring& s,size_t max) {
 }
 void loadDatabase() {
  games.clear();
+ controllerCompatibility=GetPrivateProfileIntW(L"Settings",L"ControllerCompatibility",0,ini.c_str())!=0;
+ auto mode=GetPrivateProfileIntW(L"Settings",L"DefaultControllerMode",2,ini.c_str());
+ defaultControllerMode=mode>=1&&mode<=3?static_cast<ControllerMode>(mode):ControllerMode::Xbox;
+ preferredControllerGuid=readValue(L"Settings",L"PreferredController");
  openButton=GetPrivateProfileIntW(L"Settings",L"Open",13,ini.c_str());
  okButton=GetPrivateProfileIntW(L"Settings",L"Confirm",2,ini.c_str());
  backButton=GetPrivateProfileIntW(L"Settings",L"Back",3,ini.c_str());
@@ -30,6 +34,8 @@ void loadDatabase() {
   g.name=readValue(section.c_str(),L"Name"); g.path=readValue(section.c_str(),L"Path");
   g.args=readValue(section.c_str(),L"Args"); g.dir=readValue(section.c_str(),L"Dir");
   g.cover=readValue(section.c_str(),L"Cover"); g.note=readValue(section.c_str(),L"Note");
+  const auto controller=GetPrivateProfileIntW(section.c_str(),L"ControllerMode",0,ini.c_str());
+  g.controllerMode=controller<=3?static_cast<ControllerMode>(controller):ControllerMode::Auto;
   g.favorite=GetPrivateProfileIntW(section.c_str(),L"Favorite",0,ini.c_str())!=0;
   if(!g.name.empty()&&!g.path.empty())games.push_back(std::move(g));
  }
@@ -39,12 +45,14 @@ bool saveDatabase(HWND owner) {
   L"\r\nConfirm="+std::to_wstring(okButton)+L"\r\nBack="+std::to_wstring(backButton)+
   L"\r\nFavorite="+std::to_wstring(starButton)+L"\r\nAutoOpen="+(autoOpen?L"1":L"0")+L"\r\n";
  auto field=[&s](const wchar_t* key,const std::wstring& value) { s+=std::wstring(key)+L"=\""+value+L"\"\r\n"; };
+ s+=L"ControllerCompatibility="+std::wstring(controllerCompatibility?L"1":L"0")+L"\r\nDefaultControllerMode="+std::to_wstring(static_cast<int>(defaultControllerMode))+L"\r\n";
+ field(L"PreferredController",preferredControllerGuid);
  s+=L"[Profile]\r\n";field(L"Name",profileName);field(L"Avatar",avatarPath);
  s+=L"[Games]\r\nCount="+std::to_wstring(games.size())+L"\r\n";
  for(size_t i=0;i<games.size();++i) {
   const auto& g=games[i];s+=L"[Game"+std::to_wstring(i)+L"]\r\n";
   field(L"Name",g.name);field(L"Path",g.path);field(L"Args",g.args);field(L"Dir",g.dir);
-  field(L"Cover",g.cover);field(L"Note",g.note);s+=L"Favorite="+std::wstring(g.favorite?L"1":L"0")+L"\r\n";
+  field(L"Cover",g.cover);field(L"Note",g.note);s+=L"ControllerMode="+std::to_wstring(static_cast<int>(g.controllerMode))+L"\r\n";s+=L"Favorite="+std::wstring(g.favorite?L"1":L"0")+L"\r\n";
  }
  const std::wstring tmp=ini+L".tmp";
  HANDLE file=CreateFileW(tmp.c_str(),GENERIC_WRITE,0,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
@@ -129,7 +137,12 @@ void toggleFavorite() {
 }
 void launch() {
  if(selection<0||selection>=static_cast<int>(games.size()))return;
- const auto& g=games[selection];SHELLEXECUTEINFOW s{};
+ const auto& g=games[selection];
+ if(!bridgePrepareLaunch(g.controllerMode)) {
+  if(selfTesting)return;
+  if(MessageBoxW(win,(bridgeStatus()+L"\n\nA conversão para este jogo ainda não está pronta. Iniciar usando somente o controle físico?").c_str(),L"Compatibilidade do controle",MB_YESNO|MB_ICONWARNING|MB_DEFBUTTON2)!=IDYES)return;
+ }
+ SHELLEXECUTEINFOW s{};
  s.cbSize=sizeof(s);s.fMask=SEE_MASK_FLAG_NO_UI;s.hwnd=win;s.lpVerb=L"open";s.lpFile=g.path.c_str();
  s.lpParameters=g.args.empty()?nullptr:g.args.c_str();s.lpDirectory=g.dir.empty()?nullptr:g.dir.c_str();s.nShow=SW_SHOWNORMAL;
  if(ShellExecuteExW(&s))hide();
