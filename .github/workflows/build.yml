@@ -2,7 +2,7 @@ name: Build Windows
 on:
   workflow_dispatch:
   push:
-    paths: ['src/**', 'CMakeLists.txt', 'github/workflows/build.yml']
+    paths: ['src/**', 'CMakeLists.txt', '.github/workflows/build.yml']
 jobs:
   windows:
     runs-on: windows-latest
