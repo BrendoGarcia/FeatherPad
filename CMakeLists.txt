@@ -26,7 +26,6 @@ FetchContent_MakeAvailable(sdl3sdk vigem zlibsrc)
 add_library(fp_inflate STATIC ${zlibsrc_SOURCE_DIR}/adler32.c ${zlibsrc_SOURCE_DIR}/crc32.c
   ${zlibsrc_SOURCE_DIR}/inflate.c ${zlibsrc_SOURCE_DIR}/inftrees.c ${zlibsrc_SOURCE_DIR}/inffast.c ${zlibsrc_SOURCE_DIR}/zutil.c)
 target_include_directories(fp_inflate PUBLIC ${zlibsrc_SOURCE_DIR})
-target_compile_definitions(fp_inflate PUBLIC Z_SOLO)
 configure_file(src/app.rc ${CMAKE_CURRENT_BINARY_DIR}/generated/app.rc @ONLY)
 add_executable(FeatherPad WIN32 src/main.cpp src/storage.cpp src/art.cpp src/ui.cpp src/input.cpp
   src/controller_state.cpp src/gamepad_bridge.cpp src/experience.cpp src/UpdateManager.cpp src/update_common.cpp tests/controller_state_tests.cpp tests/smoke.cpp src/update_zip.cpp ${CMAKE_CURRENT_BINARY_DIR}/generated/app.rc)

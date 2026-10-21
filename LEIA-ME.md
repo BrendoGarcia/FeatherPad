@@ -1,3 +1,51 @@
+# Correções 2.2.1 — capas, teclado e atualização de Releases
+
+- **Capas em tela cheia:** recortes arredondados agora usam um caminho GDI que acompanha
+  a transformação da tela. Testes verificam pixels em 1366×768, 1920×1080 e 2560×1440.
+- **Teclado:** fileiras QWERTY deslocadas, teclas amplas/arredondadas, Shift, apagar,
+  espaço largo e Aplicar. O botão 123 alterna números, acentos, símbolos e letras.
+  Direcional escolhe pela posição visual; confirmar digita e voltar cancela. O teclado
+  físico também digita diretamente, mesmo com uma tecla virtual em foco.
+- **Atualizações:** a tag pública e a versão interna deixam de ser comparadas como se
+  fossem a mesma numeração. A detecção compara tamanho e SHA-256 dos arquivos reais.
+  Assim, uma Release chamada 1.0.1 não é descartada porque o programa foi compilado
+  internamente como 2.2.0. Executáveis com versão interna inferior são bloqueados antes
+  de aplicar; alterações na mesma versão interna podem ser instaladas após confirmação.
+
+## Releases com ZIP ou arquivos individuais
+
+O launcher prefere os assets individuais, baixando somente os arquivos diferentes.
+Também aceita uma Release manual com **FeatherPad-Windows-x64.zip** (ou o ZIP versionado
+produzido pelo workflow). Nesse caso oferece baixar o ZIP para inspecionar o conteúdo;
+não informa que o aplicativo está atualizado sem conferir os arquivos.
+
+O ZIP é conferido pelo SHA-256 fornecido pela API do GitHub. A extração é nativa, usando
+somente o inflador estático da zlib 1.3.1: não abre PowerShell, navegador ou outro programa.
+São aceitos ZIP armazenado/Deflate e um pacote na raiz ou dentro de uma pasta. ZIP64,
+criptografia, links, caminhos absolutos/ascendentes, nomes duplicados, CRC incorreto e
+arquivos fora dos limites são rejeitados. Apenas os arquivos conhecidos são extraídos;
+a biblioteca do usuário nunca faz parte do plano de substituição.
+
+O pacote deve conter `FeatherPad.exe`, `Updater.exe`, `SDL3.dll`, `LICENSE`, `LEIA-ME.md`,
+`licenses/SDL3.txt` e `licenses/ViGEmClient.txt`. O aviso `licenses/zlib.txt` acompanha os
+novos pacotes e também é atualizado quando presente. O ZIP completo tem limite de 64 MB;
+cada arquivo descompactado, 128 MB; total extraído, 256 MB. Um ZIP é baixado inteiro —
+a economia de download por arquivo só é possível quando a release oferece assets soltos.
+
+A versão do programa agora vem de **um único lugar: `project(... VERSION ...)` no
+CMakeLists.txt**. O CMake gera os recursos de versão do EXE e a constante do atualizador.
+O script de pacote verifica a versão do binário e exercita a extração do ZIP real. Para
+publicação pelo workflow, use uma tag `v` seguida dessa versão. Tags manuais com outra
+numeração continuam reconhecidas pelo atualizador, por comparação de conteúdo.
+
+**Migração:** o botão da 2.2.0 continua contendo a lógica antiga. Para receber esta
+correção, encerre o monitor e extraia uma vez o pacote completo da 2.2.1. Depois use o
+botão corrigido para Releases futuras. Nada é alterado nas Releases já publicadas.
+
+---
+
+## Guia da versão 2.2 (recursos preservados; atualização revisada acima)
+
 # FeatherPad 2.2 — pesquisa, teclado virtual, tela cheia e atualizações
 
 ## Pesquisa pelo controle
@@ -69,8 +117,7 @@ ZIP completo, checksums e sete assets individuais: `FeatherPad.exe`, `Updater.ex
 `SDL3.dll`, `LICENSE`, `LEIA-ME.md`, `SDL3.txt` e `ViGEmClient.txt`. Os dois últimos vão
 para `licenses` na instalação. Arquivos extras não são instalados automaticamente.
 
-Atualize de forma consistente a versão em `CMakeLists.txt`, `src/update_common.h`,
-`src/app.rc` e no título. Faça commit e publique uma tag estável correspondente, como
+Atualize a versão em `CMakeLists.txt`; o CMake propaga para o EXE e o atualizador. Faça commit e publique uma tag estável correspondente, como
 `v2.2.0`. O workflow também aceita execução manual com uma tag já existente. Não
 sobrescreve uma release existente. A criação desta funcionalidade não publica uma release.
 
