@@ -11,7 +11,8 @@ Device* deviceFor(HANDLE handle) {
  USHORT count=caps.NumberInputValueCaps;d.values.resize(count);
  if(count&&HidP_GetValueCaps(HidP_Input,d.values.data(),&count,pp)!=HIDP_STATUS_SUCCESS)d.values.clear();else d.values.resize(count);
  UINT pathSize=0;GetRawInputDeviceInfoW(handle,RIDI_DEVICENAME,nullptr,&pathSize);
- if(controllerCompatibility&&pathSize&&pathSize<32768){std::wstring path(pathSize,L'\0');if(GetRawInputDeviceInfoW(handle,RIDI_DEVICENAME,&path[0],&pathSize)!=static_cast<UINT>(-1)&&isVirtualBusPath(path))return nullptr;}
+ if(pathSize&&pathSize<32768){d.path.assign(pathSize,L'\0');if(GetRawInputDeviceInfoW(handle,RIDI_DEVICENAME,&d.path[0],&pathSize)==static_cast<UINT>(-1))d.path.clear();else d.path.resize(pathSize?pathSize-1:0);}
+ if(controllerCompatibility&&!d.path.empty()&&isVirtualBusPath(d.path))return nullptr;
  auto entry=devices.emplace(handle,std::move(d));
  status(L"Controle conectado. Sua biblioteca está pronta.");return &entry.first->second;
 }
@@ -25,7 +26,7 @@ namespace {
   auto pp=reinterpret_cast<PHIDP_PREPARSED_DATA>(d->descriptor.data());USAGE buttons[128]{};ULONG count=128;
   if(HidP_GetUsages(HidP_Input,9,0,buttons,&count,pp,bytes,length)!=HIDP_STATUS_SUCCESS)return;
   std::set<USAGE> now(buttons,buttons+count),previous=d->previous;d->previous=now;
-  controllerButtons(handle,now,previous);
+  useControllerProfile(d->path);controllerButtons(handle,now,previous);
   const HWND foreground=GetForegroundWindow();
   if(captureWin||!IsWindowVisible(win)||IsIconic(win)||(foreground!=win&&foreground!=panel&&foreground!=keyboardWindow)) {d->direction=0;return;}
   if(panel&&page==Page::Diagnostic){d->direction=0;return;}

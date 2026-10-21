@@ -23,6 +23,7 @@ void loadDatabase() {
  okButton=GetPrivateProfileIntW(L"Settings",L"Confirm",2,ini.c_str());
  backButton=GetPrivateProfileIntW(L"Settings",L"Back",3,ini.c_str());
  starButton=GetPrivateProfileIntW(L"Settings",L"Favorite",4,ini.c_str());
+ loadControllerProfiles();
  autoOpen=GetPrivateProfileIntW(L"Settings",L"AutoOpen",0,ini.c_str())!=0;
  profileName=readValue(L"Profile",L"Name",L"Jogador");
  if(profileName.empty())profileName=L"Jogador";
@@ -31,6 +32,10 @@ void loadDatabase() {
  for(UINT i=0;i<count;++i) {
   const auto section=L"Game"+std::to_wstring(i);
   Game g;
+  g.id=readValue(section.c_str(),L"Id");if(g.id.empty())g.id=newLibraryId();
+  g.categories=readValue(section.c_str(),L"Categories");
+  auto number=[&](const wchar_t* key){const auto value=readValue(section.c_str(),key,L"0");wchar_t* end=nullptr;if(value.empty()||value[0]==L'-')return 0ULL;const auto n=wcstoull(value.c_str(),&end,10);return end&&!*end?n:0ULL;};
+  g.launches=number(L"Launches");g.lastLaunch=number(L"LastLaunch");g.playedSeconds=number(L"PlayedSeconds");
   g.name=readValue(section.c_str(),L"Name"); g.path=readValue(section.c_str(),L"Path");
   g.args=readValue(section.c_str(),L"Args"); g.dir=readValue(section.c_str(),L"Dir");
   g.cover=readValue(section.c_str(),L"Cover"); g.note=readValue(section.c_str(),L"Note");
@@ -50,10 +55,13 @@ bool saveDatabase(HWND owner) {
  s+=L"[Profile]\r\n";field(L"Name",profileName);field(L"Avatar",avatarPath);
  s+=L"[Games]\r\nCount="+std::to_wstring(games.size())+L"\r\n";
  for(size_t i=0;i<games.size();++i) {
-  const auto& g=games[i];s+=L"[Game"+std::to_wstring(i)+L"]\r\n";
+  auto& g=games[i];if(g.id.empty())g.id=newLibraryId();s+=L"[Game"+std::to_wstring(i)+L"]\r\n";
+  field(L"Id",g.id);field(L"Categories",g.categories);
+  s+=L"Launches="+std::to_wstring(g.launches)+L"\r\nLastLaunch="+std::to_wstring(g.lastLaunch)+L"\r\nPlayedSeconds="+std::to_wstring(g.playedSeconds)+L"\r\n";
   field(L"Name",g.name);field(L"Path",g.path);field(L"Args",g.args);field(L"Dir",g.dir);
   field(L"Cover",g.cover);field(L"Note",g.note);s+=L"ControllerMode="+std::to_wstring(static_cast<int>(g.controllerMode))+L"\r\n";s+=L"Favorite="+std::wstring(g.favorite?L"1":L"0")+L"\r\n";
  }
+ s+=serializeControllerProfiles();
  const std::wstring tmp=ini+L".tmp";
  HANDLE file=CreateFileW(tmp.c_str(),GENERIC_WRITE,0,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
  bool good=false;
@@ -114,7 +122,7 @@ void toggleStartup() {
 }
 void rebuildLibrary(int preferred) {
  visibleGames.clear();
- for(size_t i=0;i<games.size();++i)if((!favoritesOnly||games[i].favorite)&&gameMatchesSearch(games[i].name,searchQuery))visibleGames.push_back(static_cast<int>(i));
+ for(size_t i=0;i<games.size();++i)if((!favoritesOnly||games[i].favorite)&&gameMatchesSearch(games[i].name,searchQuery)&&inCollection(games[i].categories,collectionFilter))visibleGames.push_back(static_cast<int>(i));
  if(preferred>=0)selection=preferred;
  if(std::find(visibleGames.begin(),visibleGames.end(),selection)==visibleGames.end())selection=visibleGames.empty()?-1:visibleGames.front();
  firstVisible=0;keyboardFocus=-1;
@@ -143,8 +151,8 @@ void launch() {
   if(MessageBoxW(win,(bridgeStatus()+L"\n\nA conversão para este jogo ainda não está pronta. Iniciar usando somente o controle físico?").c_str(),L"Compatibilidade do controle",MB_YESNO|MB_ICONWARNING|MB_DEFBUTTON2)!=IDYES)return;
  }
  SHELLEXECUTEINFOW s{};
- s.cbSize=sizeof(s);s.fMask=SEE_MASK_FLAG_NO_UI;s.hwnd=win;s.lpVerb=L"open";s.lpFile=g.path.c_str();
+ s.cbSize=sizeof(s);s.fMask=SEE_MASK_FLAG_NO_UI|SEE_MASK_NOCLOSEPROCESS;s.hwnd=win;s.lpVerb=L"open";s.lpFile=g.path.c_str();
  s.lpParameters=g.args.empty()?nullptr:g.args.c_str();s.lpDirectory=g.dir.empty()?nullptr:g.dir.c_str();s.nShow=SW_SHOWNORMAL;
- if(ShellExecuteExW(&s))hide();
+ if(ShellExecuteExW(&s)){recordLaunch(static_cast<size_t>(selection),s.hProcess);hide();}
  else if(!selfTesting)MessageBoxW(win,(L"Não foi possível abrir o jogo (erro "+std::to_wstring(GetLastError())+L"). Confira o executável, os argumentos e a pasta de trabalho em Editar jogo.").c_str(),L"FeatherPad",MB_ICONERROR);
 }

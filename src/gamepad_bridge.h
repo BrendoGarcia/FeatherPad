@@ -2,7 +2,10 @@
 #include "controller_state.h"
 
 constexpr UINT_PTR GAMEPAD_TIMER=601;
-struct ControllerSource { unsigned id=0;std::wstring name,guid; };
+struct ControllerSource { unsigned id=0;std::wstring name,guid,key; };
+std::wstring bridgeBatteryStatus();
+size_t bridgePlayerCount();
+std::wstring bridgePlayerSummary();
 extern bool controllerCompatibility;
 extern ControllerMode defaultControllerMode;
 extern std::wstring preferredControllerGuid;

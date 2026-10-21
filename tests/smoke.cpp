@@ -27,12 +27,15 @@ int runSelfTest() {
  check(!controllerCompatibility&&defaultControllerMode==ControllerMode::Xbox&&(games.empty()||games[0].controllerMode==ControllerMode::Auto),"legacy libraries do not enable emulation or lose games during upgrade");
  if(games.empty()){cleanup(dataFolder);return 1;}
  check(profileName==L"Jogador"&&!games[0].favorite&&games[0].cover.empty(),"new fields default safely during upgrade");
- games[0].args=L"--name \"a b\"";games[0].note=L"Ação, aventura e exploração";games[0].favorite=true;profileName=L"Brendo \"Player\"";
+ games[0].args=L"--name \"a b\"";games[0].note=L"Ação, aventura e exploração";games[0].categories=L"Campanha; Emuladores; campanha";games[0].launches=7;games[0].lastLaunch=133800000000000000ULL;games[0].playedSeconds=3723;games[0].favorite=true;profileName=L"Brendo \"Player\"";
  check(saveDatabase(),"atomic v2 database write");loadDatabase();
- check(games.size()==1&&games[0].favorite&&games[0].args==L"--name \"a b\""&&profileName==L"Brendo \"Player\"","Unicode, quotes and favorites round trip");
+ check(games.size()==1&&games[0].favorite&&games[0].args==L"--name \"a b\""&&profileName==L"Brendo \"Player\""&&games[0].categories==L"Campanha; Emuladores; campanha"&&games[0].launches==7&&games[0].playedSeconds==3723,"Unicode, categories and game statistics round trip");
+ check(splitCollections(L"Corrida; Multiplayer; corrida").size()==2&&inCollection(L"Corrida; Campanha",L"campanha")&&!inCollection(L"Corrida",L"Campanha"),"collection parsing ignores case and composes game categories");
+ PadState calibrated{};calibrated.lx=4000;calibrated.ly=-16000;calibrated.rx=32767;calibrated=calibratePad(calibrated,8000);check(calibrated.lx==0&&calibrated.ly<0&&calibrated.rx==32767,"per-controller stick deadzone suppresses drift and preserves full travel");
  games[0].controllerMode=ControllerMode::PlayStation;defaultControllerMode=ControllerMode::PlayStation;controllerCompatibility=true;preferredControllerGuid=L"test-controller-guid";
  check(saveDatabase(),"write controller compatibility preferences");loadDatabase();
  check(controllerCompatibility&&defaultControllerMode==ControllerMode::PlayStation&&games[0].controllerMode==ControllerMode::PlayStation&&preferredControllerGuid==L"test-controller-guid","global and per-game controller choices survive restart");
+ useControllerProfile(L"test-physical-device");*profileBinding(A_CAPTURE_OPEN)=22;*profileBinding(A_CAPTURE_OK)=23;setProfileDeadzone(12000);check(saveDatabase(),"persist per-controller shortcuts and calibration");loadDatabase();useControllerProfile(L"test-physical-device");check(*profileBinding(A_CAPTURE_OPEN)==22&&*profileBinding(A_CAPTURE_OK)==23&&profileDeadzone()==12000,"physical controller shortcuts and calibration survive restart");useControllerProfile(L"");
  controllerCompatibility=false;defaultControllerMode=ControllerMode::Xbox;preferredControllerGuid.clear();
  check(GetFileAttributesW((ini+L".backup").c_str())!=INVALID_FILE_ATTRIBUTES,"pre-upgrade database backup exists");
  Game second;second.name=L"Second Game";second.path=L"C:\\Games\\Second.exe";games.push_back(second);
