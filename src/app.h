@@ -3,8 +3,12 @@
 #define UNICODE
 #define _UNICODE
 #endif
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <windows.h>
 #include <windowsx.h>
 #include <shellapi.h>
@@ -22,11 +26,13 @@ extern "C" {
 #include <set>
 #include <algorithm>
 #include <memory>
+#include <array>
 #include "experience.h"
 #include "UpdateManager.h"
 #include "controller_state.h"
 #include "gamepad_bridge.h"
 #include "library_features.h"
+#include "system_metrics.h"
 
 constexpr UINT TRAY=WM_APP+1, FINISH_CAPTURE=WM_APP+2;
 enum Action {
@@ -34,9 +40,9 @@ enum Action {
  A_PREV,A_NEXT,A_CLOSE_PANEL,A_SAVE_GAME,A_DELETE_GAME,A_BROWSE_GAME,A_BROWSE_COVER,A_CLEAR_COVER,
  A_STARTUP,A_AUTOOPEN,A_CAPTURE_OPEN,A_CAPTURE_OK,A_CAPTURE_BACK,A_CAPTURE_STAR,A_DIAG,
  A_CAPTURE_SAVE,A_CAPTURE_CANCEL,A_SAVE_PROFILE,A_BROWSE_AVATAR,A_CLEAR_AVATAR,A_DRAFT_FAVORITE,
- A_COMPAT,A_COMPAT_TOGGLE,A_COMPAT_RETRY,A_COMPAT_DRIVER,A_COMPAT_HIDHIDE,A_COMPAT_MAPPINGS,A_COMPAT_DEFAULT,A_COMPAT_SOURCE,A_SEARCH,A_CLEAR_SEARCH,A_FULLSCREEN,A_UPDATES,A_PLAYERS,A_SAVE_PLAYERS,A_COLLECTIONS,A_SAVE_COLLECTION,A_GAME_DETAILS,A_SAVE_DETAILS,A_STATS,A_PLAYER_PROFILE,A_CALIBRATE
+ A_COMPAT,A_COMPAT_TOGGLE,A_COMPAT_RETRY,A_COMPAT_DRIVER,A_COMPAT_HIDHIDE,A_COMPAT_MAPPINGS,A_COMPAT_DEFAULT,A_COMPAT_SOURCE,A_SEARCH,A_CLEAR_SEARCH,A_FULLSCREEN,A_UPDATES,A_PLAYERS,A_SAVE_PLAYERS,A_COLLECTIONS,A_SAVE_COLLECTION,A_GAME_DETAILS,A_SAVE_DETAILS,A_STATS,A_PLAYER_PROFILE,A_CALIBRATE,A_CONTROLS,A_GENERAL,A_METRICS,A_SETTINGS_HOME,A_NEW_COLLECTION,A_EDIT_COLLECTION,A_DELETE_COLLECTION,A_OPEN_COLLECTION,A_BACK_COLLECTIONS
 };
-enum class Page { None, Editor, Settings, Profile, Diagnostic, Compatibility, Players, Collections, Details, Statistics };
+enum class Page { None, Editor, Settings, Profile, Diagnostic, Compatibility, Players, Collections, Details, Statistics, Controls, General, Metrics };
 struct Game {
  std::wstring name,path,args,dir,cover,note;
  std::wstring id,categories;
@@ -52,7 +58,7 @@ struct Device {
  int direction=0;
  ULONGLONG repeat=0;
 };
-struct Hit { RECT r; int action; int game=-1; };
+struct Hit { RECT r; int action; int game=-1; int collection=-1; };
 struct Art { HBITMAP bitmap=nullptr; int width=0,height=0; ULONGLONG used=0; };
 
 extern HINSTANCE instance;
@@ -93,10 +99,14 @@ void destroyTheme();
 void darkTitle(HWND h);
 void show();
 void hide();
+void hideForGame();
+void autoShow();
+bool ensureTrayIcon();
+extern bool gameSessionActive;
 void openPage(Page requested,int gameIndex=-1);
-void closePanel();
+void closePanel(bool activate=true);
 void beginCapture(int action);
-void closeCapture();
+void closeCapture(bool activate=true);
 void commitCapture();
 void action(int id);
 void trayMenu();
@@ -132,3 +142,8 @@ unsigned* profileBinding(int action);
 int profileDeadzone();
 void setProfileDeadzone(int value);
 PadState calibratePad(PadState state,int deadzone);
+
+void refreshSettingsDevices();
+void drawNetworkStatus(HDC dc,RECT area,const NetworkSample& network);
+
+int regressions115(std::string& log);

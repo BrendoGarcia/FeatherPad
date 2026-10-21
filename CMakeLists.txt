@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(FeatherPad VERSION 1.1.0 LANGUAGES C CXX RC)
+project(FeatherPad VERSION 1.1.5 LANGUAGES C CXX RC)
 if(NOT WIN32)
   message(FATAL_ERROR "FeatherPad usa APIs nativas do Windows. Use Windows ou toolchain MinGW.")
 endif()
@@ -27,12 +27,12 @@ add_library(fp_inflate STATIC ${zlibsrc_SOURCE_DIR}/adler32.c ${zlibsrc_SOURCE_D
   ${zlibsrc_SOURCE_DIR}/inflate.c ${zlibsrc_SOURCE_DIR}/inftrees.c ${zlibsrc_SOURCE_DIR}/inffast.c ${zlibsrc_SOURCE_DIR}/zutil.c)
 target_include_directories(fp_inflate PUBLIC ${zlibsrc_SOURCE_DIR})
 configure_file(src/app.rc ${CMAKE_CURRENT_BINARY_DIR}/generated/app.rc @ONLY)
-add_executable(FeatherPad WIN32 src/main.cpp src/library_features.cpp src/controller_profiles.cpp src/storage.cpp src/art.cpp src/ui.cpp src/input.cpp
-  src/controller_state.cpp src/gamepad_bridge.cpp src/experience.cpp src/UpdateManager.cpp src/update_common.cpp tests/controller_state_tests.cpp tests/smoke.cpp src/update_zip.cpp ${CMAKE_CURRENT_BINARY_DIR}/generated/app.rc)
+add_executable(FeatherPad WIN32 src/main.cpp src/system_metrics.cpp src/library_features.cpp src/controller_profiles.cpp src/storage.cpp src/art.cpp src/ui.cpp src/input.cpp
+  src/controller_state.cpp src/gamepad_bridge.cpp src/experience.cpp src/UpdateManager.cpp src/update_common.cpp tests/controller_state_tests.cpp tests/smoke.cpp tests/regressions115.cpp src/update_zip.cpp ${CMAKE_CURRENT_BINARY_DIR}/generated/app.rc)
 target_include_directories(FeatherPad PRIVATE src "${sdl3sdk_SOURCE_DIR}/include")
 target_compile_features(FeatherPad PRIVATE cxx_std_17)
 target_compile_definitions(FeatherPad PRIVATE UNICODE _UNICODE WINVER=0x0601 _WIN32_WINNT=0x0601)
-target_link_libraries(FeatherPad PRIVATE ViGEmClient user32 gdi32 shell32 ole32 comdlg32 advapi32 hid windowscodecs uuid dwmapi setupapi cfgmgr32 psapi winhttp bcrypt version fp_inflate)
+target_link_libraries(FeatherPad PRIVATE ViGEmClient user32 gdi32 shell32 ole32 comdlg32 advapi32 hid windowscodecs uuid dwmapi setupapi cfgmgr32 psapi wlanapi iphlpapi winhttp bcrypt version fp_inflate)
 if(MSVC)
   target_compile_options(FeatherPad PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:/W4;/O1;/utf-8>")
 else()

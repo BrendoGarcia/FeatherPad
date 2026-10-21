@@ -13,7 +13,9 @@ Um launcher nativo para Windows que reúne seus jogos, permite navegar pelo cont
 
 **Interface nativa · Biblioteca com capas · Favoritos · Controle USB/Bluetooth · Build pelo GitHub**
 
-**Multiplayer local com até 4 controles · Categorias · Perfis por dispositivo · Estatísticas e medição de RAM/rede/bateria**
+**Multiplayer local com até 4 controles · Coleções por tópicos · Perfis por dispositivo · RAM medida pelo Windows · Sinal Wi-Fi · Bandeja persistente**
+
+Versão **1.1.5**: configurações separadas por função, monitor de jogadores sem teste automático, coleções com cadastro próprio e correções na ida para a bandeja. Veja o [guia operacional](LEIA-ME.md).
 
 [📦 Downloads](https://github.com/BrendoGarcia/FeatherPad/releases) · [⚙️ Compilar pelo GitHub](#️-build-pelo-github-sem-instalar-compilador) · [📖 Guia operacional](LEIA-ME.md) · [🐛 Relatar problema](https://github.com/BrendoGarcia/FeatherPad/issues)
 

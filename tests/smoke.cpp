@@ -126,7 +126,7 @@ int runSelfTest() {
  ShowWindow(win,SW_MINIMIZE);show();
  check(IsWindowVisible(win)&&!IsIconic(win)&&IsZoomed(win),"restoring a minimized maximized window preserves maximization");
  ShowWindow(win,SW_SHOWNORMAL);
- openPage(Page::Settings);check(panel&&IsWindow(panel),"open dedicated settings window");check(GetDlgItem(panel,A_PLAYER_PROFILE)!=nullptr&&GetDlgItem(panel,A_CALIBRATE)!=nullptr,"settings expose physical-device shortcut profiles and calibration controls");
+ openPage(Page::Settings);check(panel&&IsWindow(panel)&&GetDlgItem(panel,A_CONTROLS)&&GetDlgItem(panel,A_PLAYERS),"settings home separates controls, players and application");closePanel();openPage(Page::Controls);check(GetDlgItem(panel,A_PLAYER_PROFILE)!=nullptr&&GetDlgItem(panel,A_CALIBRATE)!=nullptr,"settings expose physical-device shortcut profiles and calibration controls");
  beginCapture(A_CAPTURE_OPEN);check(captureWin&&captureAction==A_CAPTURE_OPEN,"open action-specific controller popup");
  HANDLE fake=reinterpret_cast<HANDLE>(static_cast<INT_PTR>(123));
  controllerButtons(fake,{6},{});check(captureCandidate==0,"held input cannot bind before a release report");
@@ -137,15 +137,15 @@ int runSelfTest() {
  commitCapture();check(!captureWin&&openButton==6,"save captured button and close only capture popup");
  beginCapture(A_CAPTURE_OPEN);controllerButtons(fake,{},{});controllerButtons(fake,{7},{});closeCapture();
  check(openButton==6,"cancel capture preserves saved binding");closePanel();loadDatabase();check(openButton==6,"saved binding survives reload");
- HANDLE fakeDevice=reinterpret_cast<HANDLE>(static_cast<INT_PTR>(456));Device profileDevice;profileDevice.path=L"test-hid-profile";devices[fakeDevice]=profileDevice;openPage(Page::Settings);SendMessageW(GetDlgItem(panel,A_PLAYER_PROFILE),CB_SETCURSEL,0,0);action(A_PLAYER_PROFILE);check(currentControllerProfile()==L"test-hid-profile","settings select a physical controller profile for shortcut and calibration edits");closePanel();devices.erase(fakeDevice);useControllerProfile(L"");
+ HANDLE fakeDevice=reinterpret_cast<HANDLE>(static_cast<INT_PTR>(456));Device profileDevice;profileDevice.path=L"test-hid-profile";devices[fakeDevice]=profileDevice;openPage(Page::Controls);SendMessageW(GetDlgItem(panel,A_PLAYER_PROFILE),CB_SETCURSEL,0,0);action(A_PLAYER_PROFILE);check(currentControllerProfile()==L"test-hid-profile","settings select a physical controller profile for shortcut and calibration edits");closePanel();devices.erase(fakeDevice);useControllerProfile(L"");
  openPage(Page::Profile);check(panel&&page==Page::Profile,"profile editor opens independently");closePanel();
  openPage(Page::Editor,0);check(GetDlgItem(panel,400)!=nullptr&&GetDlgItem(panel,A_SAVE_GAME)!=nullptr,"game editor fields and save control exist");
  SetWindowTextW(GetDlgItem(panel,400),L"Edited through native UI");action(A_SAVE_GAME);
  check(!panel&&games[0].name==L"Edited through native UI","native game editor saves and closes");
- openPage(Page::Diagnostic);controllerButtons(fake,{2,3},{});
- check(textOf(GetDlgItem(panel,420)).find(L"2")!=std::wstring::npos,"diagnostic shows inputs without rebinding");closePanel();
+ openPage(Page::Diagnostic);controllerButtons(fake,{7},{});
+ check(textOf(GetDlgItem(panel,420)).find(L"7")!=std::wstring::npos,"diagnostic shows inputs without rebinding");closePanel();
  openPage(Page::Compatibility);check(GetDlgItem(panel,A_COMPAT_TOGGLE)!=nullptr&&GetDlgItem(panel,A_COMPAT_DEFAULT)!=nullptr,"controller compatibility panel exposes activation and default format");closePanel();
- failed+=controllerStateSelfTest(log);failed+=bridgeSelfTest(log);
+ failed+=controllerStateSelfTest(log);failed+=bridgeSelfTest(log);failed+=regressions115(log);
  clearArt();cleanup(dataFolder);log+="\nFailures: "+std::to_string(failed)+"\n";
  writeBytes(L"self-test.log",log.data(),static_cast<DWORD>(log.size()));return failed?1:0;
 }

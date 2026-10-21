@@ -30,6 +30,7 @@ namespace {
   FP_SDL_FUNCTION(SDL_UpdateGamepads);
 #undef FP_SDL_FUNCTION
  } api;
+ bool uiArmed=false;
  bool initialized=false,driverTried=false,targetAttached=false,waitRelease=true,targetAttempted=false;
  unsigned epoch=0;UINT timerInterval=0;
  SDL_Gamepad* source=nullptr;SDL_JoystickID sourceId=0;
@@ -151,7 +152,7 @@ namespace {
   for(const auto& candidate:sources) {
    if(!preferredControllerGuid.empty()&&candidate.guid!=preferredControllerGuid)continue;
    for(auto it=extraPlayers.begin();it!=extraPlayers.end();){if(it->id==candidate.id){closeExtra(*it);it=extraPlayers.erase(it);}else ++it;}
-   source=api.SDL_OpenGamepad(candidate.id);if(source){sourceId=candidate.id;waitRelease=true;break;}
+   source=api.SDL_OpenGamepad(candidate.id);if(source){sourceId=candidate.id;waitRelease=true;uiArmed=false;break;}
   }
   retuneTimer(source!=nullptr);
   if(win&&IsWindowVisible(win))InvalidateRect(win,nullptr,FALSE);
@@ -191,7 +192,7 @@ namespace {
   if(activeMode==ControllerMode::Xbox){const auto s=toXbox(state);if(p.hasLast&&p.xbox.buttons==s.buttons&&p.xbox.lt==s.lt&&p.xbox.rt==s.rt&&p.xbox.lx==s.lx&&p.xbox.ly==s.ly&&p.xbox.rx==s.rx&&p.xbox.ry==s.ry)return true;XUSB_REPORT r{};r.wButtons=s.buttons;r.bLeftTrigger=s.lt;r.bRightTrigger=s.rt;r.sThumbLX=s.lx;r.sThumbLY=s.ly;r.sThumbRX=s.rx;r.sThumbRY=s.ry;auto result=vigem_target_x360_update(client,p.target,r);if(VIGEM_SUCCESS(result)){p.xbox=s;p.hasLast=true;}return VIGEM_SUCCESS(result);}
   const auto s=toPlayStation(state);if(p.hasLast&&p.sony.buttons==s.buttons&&p.sony.special==s.special&&p.sony.lt==s.lt&&p.sony.rt==s.rt&&p.sony.lx==s.lx&&p.sony.ly==s.ly&&p.sony.rx==s.rx&&p.sony.ry==s.ry)return true;DS4_REPORT r{};r.bThumbLX=s.lx;r.bThumbLY=s.ly;r.bThumbRX=s.rx;r.bThumbRY=s.ry;r.wButtons=s.buttons;r.bSpecial=s.special;r.bTriggerL=s.lt;r.bTriggerR=s.rt;auto result=vigem_target_ds4_update(client,p.target,r);if(VIGEM_SUCCESS(result)){p.sony=s;p.hasLast=true;}return VIGEM_SUCCESS(result);
  }
- void tickExtraPlayers(){if(!controllerCompatibility)return;syncExtraPlayers();for(auto& p:extraPlayers){auto it=std::find_if(sources.begin(),sources.end(),[&](const auto& v){return v.id==p.id;});useControllerProfile(it==sources.end()?L"":it->key);auto state=calibratePad(readState(p.pad),profileDeadzone());if(captureWin&&GetForegroundWindow()==captureWin){std::set<USAGE> buttons;const std::uint32_t positions[]={PadWest,PadSouth,PadEast,PadNorth,PadLShoulder,PadRShoulder,0,0,PadBack,PadStart,PadLStick,PadRStick,PadGuide,PadTouch};for(unsigned i=0;i<14;++i)if(positions[i]&&(state.buttons&positions[i]))buttons.insert(static_cast<USAGE>(i+1));if(state.lt>30)buttons.insert(7);if(state.rt>30)buttons.insert(8);const HANDLE handle=reinterpret_cast<HANDLE>(-static_cast<INT_PTR>(p.id)-2);controllerButtons(handle,buttons,p.previous);p.previous=std::move(buttons);}if(activeMode!=ControllerMode::Native){if(uiVisible())p.waiting=true;else if(p.waiting&&padAtRest(state))p.waiting=false;if(!submitExtra(p,uiVisible()||p.waiting?PadState{}:state))stateMessage(L"Uma saída de controle multiplayer falhou. Confira o driver virtual e as vagas disponíveis.");}}}
+ void tickExtraPlayers(){if(!controllerCompatibility)return;syncExtraPlayers();for(auto& p:extraPlayers){auto it=std::find_if(sources.begin(),sources.end(),[&](const auto& v){return v.id==p.id;});useControllerProfile(it==sources.end()?L"":it->key);auto state=calibratePad(readState(p.pad),profileDeadzone());if((captureWin&&GetForegroundWindow()==captureWin)||(panel&&page==Page::Diagnostic&&GetForegroundWindow()==panel)){std::set<USAGE> buttons;const std::uint32_t positions[]={PadWest,PadSouth,PadEast,PadNorth,PadLShoulder,PadRShoulder,0,0,PadBack,PadStart,PadLStick,PadRStick,PadGuide,PadTouch};for(unsigned i=0;i<14;++i)if(positions[i]&&(state.buttons&positions[i]))buttons.insert(static_cast<USAGE>(i+1));if(state.lt>30)buttons.insert(7);if(state.rt>30)buttons.insert(8);const HANDLE handle=reinterpret_cast<HANDLE>(-static_cast<INT_PTR>(p.id)-2);const unsigned before=epoch;controllerButtons(handle,buttons,p.previous);if(before!=epoch)return;p.previous=std::move(buttons);}if(activeMode!=ControllerMode::Native){if(uiVisible())p.waiting=true;else if(p.waiting&&padAtRest(state))p.waiting=false;if(!submitExtra(p,uiVisible()||p.waiting?PadState{}:state))stateMessage(L"Uma saída de controle multiplayer falhou. Confira o driver virtual e as vagas disponíveis.");}}}
  bool ensureTarget() {
   if(activeMode==ControllerMode::Native){destroyTarget();stateMessage(source?L"Modo nativo: o jogo recebe o controle físico, sem conversão.":L"Modo nativo. Conecte um controle para usar o launcher.");return true;}
   if(!ensureDriver())return false;
@@ -244,7 +245,7 @@ bool isVirtualBusPath(const std::wstring& path) {
  SetupDiDestroyDeviceInfoList(set);return virtualBus;
 }
 void bridgeShutdown() {
- ++epoch;if(win)KillTimer(win,GAMEPAD_TIMER);timerInterval=0;closeDriver();
+ uiArmed=false;++epoch;if(win)KillTimer(win,GAMEPAD_TIMER);timerInterval=0;closeDriver();
  if(source&&api.module)api.SDL_CloseGamepad(source);
  source=nullptr;sourceId=0;
  if(initialized&&api.module)api.SDL_QuitSubSystem(SDL_INIT_GAMEPAD);
@@ -278,9 +279,9 @@ void bridgeTick() {
  // Reconnect can select a new physical source while retaining a valid bus client.
  if(!targetAttached&&client&&activeMode!=ControllerMode::Native)ensureTarget();
  const auto mainProfile=std::find_if(sources.begin(),sources.end(),[](const auto& v){return v.id==sourceId;});useControllerProfile(mainProfile==sources.end()?L"":mainProfile->key);
- const PadState state=calibratePad(readState(source),profileDeadzone());routeUI(state);if(started!=epoch||!source)return;
+ const PadState state=calibratePad(readState(source),profileDeadzone());if(!uiArmed&&padAtRest(state))uiArmed=true;if(uiArmed)routeUI(state);if(started!=epoch||!source)return;
  const HWND foreground=GetForegroundWindow();
- if(!captureWin&&(foreground==win||foreground==panel||foreground==keyboardWindow)) {
+ if(uiArmed&&!captureWin&&(foreground==win||foreground==panel||foreground==keyboardWindow)) {
   static int lastDirection=0;static ULONGLONG nextDirection=0;int direction=0;
   if(state.buttons&PadLeft)direction=-1;else if(state.buttons&PadRight)direction=1;else if(state.buttons&PadUp)direction=-2;else if(state.buttons&PadDown)direction=2;
   else {const int dz=profileDeadzone();if(state.lx<-dz)direction=-1;else if(state.lx>dz)direction=1;else if(state.ly<-dz)direction=-2;else if(state.ly>dz)direction=2;}
@@ -302,6 +303,19 @@ bool bridgePrepareLaunch(ControllerMode requested) {
 std::wstring bridgeStatus(){return message;}
 size_t bridgePlayerCount(){return std::min<size_t>(4,sources.empty()?devices.size():sources.size());}
 std::wstring bridgePlayerSummary(){std::wstring s=L"Controles: "+std::to_wstring(bridgePlayerCount())+L"/4";if(targetAttached&&targetMode==ControllerMode::Xbox&&virtualXboxSlot!=0xffffffffUL)s+=L" · P1 XInput "+std::to_wstring(virtualXboxSlot+1);unsigned number=2;for(const auto& p:extraPlayers){if(p.attached&&p.mode==ControllerMode::Xbox&&p.slot!=0xffffffffUL)s+=L" · P"+std::to_wstring(number)+L" XInput "+std::to_wstring(p.slot+1);++number;}return s;}
+std::vector<std::wstring> bridgePlayerRows(){
+ std::vector<std::wstring> rows;std::set<unsigned> shown;
+ auto append=[&](unsigned id,const std::wstring& name,ControllerMode mode,bool attached,ULONG slot){
+  if(rows.size()>=4)return;
+  const auto output=mode==ControllerMode::Native?L"Físico / nativo":!attached?L"Saída virtual indisponível":mode==ControllerMode::Xbox?(slot==0xffffffffUL?std::wstring(L"Xbox · índice indisponível"):L"Xbox · posição XInput "+std::to_wstring(slot+1)):L"PlayStation 4 virtual";
+  rows.push_back(L"P"+std::to_wstring(rows.size()+1)+L" · "+name+L"\r\nConectado · "+output);shown.insert(id);
+ };
+ if(source){const auto it=std::find_if(sources.begin(),sources.end(),[](const auto& s){return s.id==sourceId;});append(sourceId,it==sources.end()?L"Controle físico":it->name,activeMode,targetAttached,virtualXboxSlot);}
+ for(const auto& player:extraPlayers){const auto it=std::find_if(sources.begin(),sources.end(),[&](const auto& s){return s.id==player.id;});append(player.id,it==sources.end()?L"Controle físico":it->name,activeMode,player.attached,player.slot);}
+ for(const auto& item:sources)if(!shown.count(item.id))append(item.id,item.name,activeMode,false,0xffffffffUL);
+ if(rows.empty())for(const auto& item:devices){if(rows.size()>=4)break;rows.push_back(L"P"+std::to_wstring(rows.size()+1)+L" · Controle físico\r\nConectado · modo nativo");(void)item;}
+ return rows;
+}
 std::wstring bridgeBatteryStatus(){if(!api.SDL_GetGamepadPowerInfo||sources.empty())return L"Bateria: indisponível";auto value=[&](SDL_Gamepad* pad){if(!pad)return std::wstring(L"n/d");int percent=-1;const auto power=api.SDL_GetGamepadPowerInfo(pad,&percent);if(power==SDL_POWERSTATE_ERROR||power==SDL_POWERSTATE_UNKNOWN||percent<0)return std::wstring(L"n/d");if(power==SDL_POWERSTATE_NO_BATTERY)return std::wstring(L"sem bateria");return std::to_wstring(percent)+L"%";};std::wstring out;unsigned player=1;for(const auto& item:sources){if(player>4)break;SDL_Gamepad* pad=nullptr;bool temporary=false;if(source&&item.id==sourceId)pad=source;else for(const auto& extra:extraPlayers)if(extra.id==item.id){pad=extra.pad;break;}if(!pad&&initialized){pad=api.SDL_OpenGamepad(item.id);temporary=pad!=nullptr;}if(!out.empty())out+=L", ";out+=L"P"+std::to_wstring(player++)+L" "+value(pad);if(temporary)api.SDL_CloseGamepad(pad);}return L"Bateria: "+out;}
 std::vector<ControllerSource> bridgeSources(){return sources;}
 int bridgeSelfTest(std::string& log) {

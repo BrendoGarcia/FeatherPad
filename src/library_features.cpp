@@ -1,6 +1,4 @@
 #include "app.h"
-#include <psapi.h>
-#include <netlistmgr.h>
 #include <cwctype>
 #include <limits>
 std::wstring collectionFilter;
@@ -8,7 +6,6 @@ namespace {
 struct Session {std::wstring id;HANDLE process;ULONGLONG tick;};
 std::vector<Session> sessions;
 ULONGLONG lastSave=0;
-std::wstring metrics=L"Medição pendente";
 bool same(const std::wstring& a,const std::wstring& b){return CompareStringOrdinal(a.c_str(),-1,b.c_str(),-1,TRUE)==CSTR_EQUAL;}
 bool samePath(std::wstring a,std::wstring b){auto normalize=[](std::wstring& p){if(p.rfind(L"\\\\?\\",0)==0)p.erase(0,4);std::replace(p.begin(),p.end(),L'/',L'\\');while(p.size()>3&&p.back()==L'\\')p.pop_back();};normalize(a);normalize(b);return same(a,b);}
 }
@@ -41,17 +38,44 @@ void libraryTick(){
   if(ended){CloseHandle(it->process);it=sessions.erase(it);dirty=true;}else ++it;
  }
  if(dirty&&(now-lastSave>=30000||sessions.empty())){saveDatabase();lastSave=now;}
- static ULONGLONG lastMetrics=0;
- if(now-lastMetrics>=2000&&IsWindowVisible(win)&&!IsIconic(win)){
-  PROCESS_MEMORY_COUNTERS_EX mem{};mem.cb=sizeof(mem);std::wstring ram=L"RAM: indisponível";
-  if(GetProcessMemoryInfo(GetCurrentProcess(),reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&mem),sizeof(mem)))ram=L"RAM priv. "+std::to_wstring(mem.PrivateUsage/1048576)+L" MB / ativa "+std::to_wstring(mem.WorkingSetSize/1048576)+L" MB";
-  std::wstring net=L"Rede desconhecida";INetworkListManager* manager=nullptr;
-  if(SUCCEEDED(CoCreateInstance(CLSID_NetworkListManager,nullptr,CLSCTX_ALL,IID_INetworkListManager,reinterpret_cast<void**>(&manager)))){NLM_CONNECTIVITY state{};if(SUCCEEDED(manager->GetConnectivity(&state)))net=(state&(NLM_CONNECTIVITY_IPV4_INTERNET|NLM_CONNECTIVITY_IPV6_INTERNET))?L"Rede: internet":state?L"Rede: local":L"Rede: offline";manager->Release();}
-  metrics=ram+L" · "+bridgeBatteryStatus()+L" · Controles: "+std::to_wstring(bridgePlayerCount())+L"/4 · "+net;lastMetrics=now;InvalidateRect(win,nullptr,FALSE);
- }
+ if(win&&IsWindowVisible(win)&&!IsIconic(win))refreshSystemMetrics();
 }
 void finishSessions(){libraryTick();for(auto& s:sessions)CloseHandle(s.process);if(!sessions.empty())saveDatabase();sessions.clear();}
-std::wstring systemMetrics(){return metrics;}
+std::wstring systemMetrics(){return memoryHeadline();}
 std::wstring gameStatistics(size_t index){if(index>=games.size())return L"";const auto& g=games[index];std::wstring last=L"Nunca";if(g.lastLaunch){ULARGE_INTEGER v{};v.QuadPart=g.lastLaunch;FILETIME ft{v.LowPart,v.HighPart},local{};SYSTEMTIME time{};if(FileTimeToLocalFileTime(&ft,&local)&&FileTimeToSystemTime(&local,&time)){wchar_t value[80]{};swprintf(value,80,L"%02u/%02u/%04u às %02u:%02u",time.wDay,time.wMonth,time.wYear,time.wHour,time.wMinute);last=value;}}
  return L"Último início: "+last+L"\r\n\r\nAberturas bem-sucedidas: "+std::to_wstring(g.launches)+L"\r\n\r\nTempo acompanhado: "+std::to_wstring(g.playedSeconds/3600)+L" h "+std::to_wstring(g.playedSeconds/60%60)+L" min\r\n\r\nO tempo acompanha somente o executável iniciado e confirmado enquanto o FeatherPad permanece aberto; não inclui processos-filhos. URIs e atalhos podem não fornecer um processo rastreável.";
 }
+
+std::vector<std::wstring> collections;
+bool collectionsHome=false;
+int collectionPage=0;
+void loadCollections(){
+ const UINT count=std::min(200u,GetPrivateProfileIntW(L"Collections",L"Count",0,ini.c_str()));
+ auto add=[](const std::wstring& name){if(name.empty()||!validField(name,40))return;if(std::none_of(collections.begin(),collections.end(),[&](const auto& c){return same(c,name);}))collections.push_back(name);};
+ for(UINT i=0;i<count;++i)add(readValue((L"Collection"+std::to_wstring(i)).c_str(),L"Name"));
+ for(const auto& g:games)for(const auto& c:splitCollections(g.categories))add(c);
+}
+std::wstring serializeCollections(){
+ std::wstring text=L"[Collections]\r\nCount="+std::to_wstring(collections.size())+L"\r\n";
+ for(size_t i=0;i<collections.size();++i)text+=L"[Collection"+std::to_wstring(i)+L"]\r\nName=\""+collections[i]+L"\"\r\n";
+ return text;
+}
+size_t collectionGameCount(const std::wstring& name){return static_cast<size_t>(std::count_if(games.begin(),games.end(),[&](const auto& g){return inCollection(g.categories,name);}));}
+bool saveCollection(const std::wstring& oldName,const std::wstring& requested){
+ auto names=splitCollections(requested);if(names.size()!=1||names.front()!=requested||!validField(requested,40))return false;
+ auto existing=std::find_if(collections.begin(),collections.end(),[&](const auto& c){return same(c,oldName);});
+ if(std::any_of(collections.begin(),collections.end(),[&](const auto& c){return same(c,requested)&&!same(c,oldName);}))return false;
+ const auto oldCollections=collections;const auto oldGames=games;const auto oldActive=collectionFilter;
+ if(oldName.empty()){if(collections.size()>=200)return false;collections.push_back(requested);}
+ else {if(existing==collections.end())return false;*existing=requested;for(auto& g:games){auto tags=splitCollections(g.categories);g.categories.clear();for(auto& c:tags){if(same(c,oldName))c=requested;if(!g.categories.empty())g.categories+=L"; ";g.categories+=c;}}if(same(collectionFilter,oldName))collectionFilter=requested;}
+ if(!saveDatabase()){collections=oldCollections;games=oldGames;collectionFilter=oldActive;return false;}return true;
+}
+bool removeCollection(const std::wstring& name){
+ const auto it=std::find_if(collections.begin(),collections.end(),[&](const auto& c){return same(c,name);});if(it==collections.end())return false;
+ const auto oldCollections=collections;const auto oldGames=games;const auto oldActive=collectionFilter;collections.erase(it);
+ for(auto& g:games){auto tags=splitCollections(g.categories);g.categories.clear();for(const auto& c:tags)if(!same(c,name)){if(!g.categories.empty())g.categories+=L"; ";g.categories+=c;}}
+ if(same(collectionFilter,name))collectionFilter.clear();
+ if(!saveDatabase()){collections=oldCollections;games=oldGames;collectionFilter=oldActive;return false;}return true;
+}
+void openCollection(size_t index){if(index>=collections.size())return;collectionsHome=false;collectionFilter=collections[index];favoritesOnly=false;searchQuery.clear();rebuildLibrary();}
+void showCollections(){collectionsHome=true;collectionFilter.clear();favoritesOnly=false;searchQuery.clear();collectionPage=0;keyboardFocus=-1;if(win)InvalidateRect(win,nullptr,FALSE);}
