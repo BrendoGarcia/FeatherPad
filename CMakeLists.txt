@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.24)
-project(FeatherPad VERSION 2.2.1 LANGUAGES C CXX RC)
+project(FeatherPad VERSION 1.0.1 LANGUAGES C CXX RC)
 if(NOT WIN32)
   message(FATAL_ERROR "FeatherPad usa APIs nativas do Windows. Use Windows ou toolchain MinGW.")
 endif()
