@@ -50,7 +50,7 @@ void openVirtualKeyboard(HWND target){
  keyboardFont=CreateFontW(-(width>=1000?20:16),0,0,0,FW_SEMIBOLD,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
  auto add=[&](const wchar_t* cls,const std::wstring& text,DWORD style,int x,int y,int w,int height,int id){HWND h=CreateWindowExW(0,cls,text.c_str(),WS_CHILD|WS_VISIBLE|style,x,y,w,height,keyboardWindow,reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),instance,nullptr);SendMessageW(h,WM_SETFONT,reinterpret_cast<WPARAM>(keyboardFont?keyboardFont:GetStockObject(DEFAULT_GUI_FONT)),TRUE);return h;};
  keyboardEdit=add(L"EDIT",target?textOf(target):searchQuery,WS_BORDER|WS_TABSTOP|ES_AUTOHSCROLL,16,18,cw-32,34,690);
- auto limit=target?SendMessageW(target,EM_GETLIMITTEXT,0,0):160;SendMessageW(keyboardEdit,EM_SETLIMITTEXT,limit,0);SendMessageW(keyboardEdit,EM_SETSEL,-1,-1);
+ auto limit=target?SendMessageW(target,EM_GETLIMITTEXT,0,0):160;SendMessageW(keyboardEdit,EM_SETLIMITTEXT,limit,0);SendMessageW(keyboardEdit,EM_SETSEL,static_cast<WPARAM>(-1),-1);
  add(L"STATIC",L"Direcional: navegar  |  Confirmar: digitar  |  Voltar: cancelar. Aplicar salva o texto.",0,16,60,cw-32,30,691);
  const int kw=(cw-32)/10,kh=(ch-108)/7;
  for(int i=0;i<60;++i)add(L"BUTTON",std::wstring(1,letters[i]),WS_TABSTOP|BS_OWNERDRAW,16+(i%10)*kw,96+(i/10)*kh,kw-4,kh-4,700+i);

@@ -46,10 +46,15 @@ int runSelfTest() {
  SetWindowTextW(GetDlgItem(keyboardWindow,690),L"Second");closeVirtualKeyboard(false);check(searchQuery.empty(),"cancel search preserves previous query");
  openVirtualKeyboard();SetWindowTextW(GetDlgItem(keyboardWindow,690),L"Second");closeVirtualKeyboard(true);check(searchQuery==L"Second"&&visibleGames.size()==1,"virtual keyboard applies search");
  searchQuery.clear();setFilter(false);
+ openVirtualKeyboard();SetFocus(GetDlgItem(keyboardWindow,700));keyboardConfirm();keyboardDirection(1,0);keyboardConfirm();
+ check(textOf(GetDlgItem(keyboardWindow,690))==L"qw","controller navigation types on virtual keys");
+ SetFocus(GetDlgItem(keyboardWindow,768));keyboardConfirm();SetFocus(GetDlgItem(keyboardWindow,700));keyboardConfirm();
+ check(textOf(GetDlgItem(keyboardWindow,690))==L"qw!","symbol page supports paths and special characters");closeVirtualKeyboard(false);
  HWND textTarget=CreateWindowExW(0,L"EDIT",L"old",WS_CHILD,0,0,200,30,win,nullptr,instance,nullptr);
  SendMessageW(textTarget,EM_SETLIMITTEXT,40,0);openVirtualKeyboard(textTarget);SetWindowTextW(GetDlgItem(keyboardWindow,690),L"new text");closeVirtualKeyboard(true);check(textOf(textTarget)==L"new text","virtual keyboard edits native fields");DestroyWindow(textTarget);
  ShowWindow(win,SW_SHOWNORMAL);RECT beforeFull{};GetWindowRect(win,&beforeFull);toggleFullscreen();
  check(fullscreen&&!(GetWindowLongPtrW(win,GWL_STYLE)&WS_CAPTION),"fullscreen removes window borders");leaveFullscreen();RECT afterFull{};GetWindowRect(win,&afterFull);check(!fullscreen&&EqualRect(&beforeFull,&afterFull),"fullscreen restores window bounds");
+ ShowWindow(win,SW_MAXIMIZE);toggleFullscreen();leaveFullscreen();check(IsZoomed(win)!=FALSE,"fullscreen restores previously maximized window");ShowWindow(win,SW_SHOWNORMAL);
  // A real BMP fixture exercises the Windows image decoder and GDI cache.
  BITMAPFILEHEADER header{};header.bfType=0x4d42;header.bfOffBits=sizeof(header)+sizeof(BITMAPINFOHEADER);header.bfSize=header.bfOffBits+16;
  BITMAPINFOHEADER info{};info.biSize=sizeof(info);info.biWidth=2;info.biHeight=2;info.biPlanes=1;info.biBitCount=32;info.biCompression=BI_RGB;

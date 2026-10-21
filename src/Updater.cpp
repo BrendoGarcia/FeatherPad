@@ -14,8 +14,8 @@ int WINAPI wWinMain(HINSTANCE,HINSTANCE,LPWSTR,int){
  auto restart=[&](){std::wstring command=L"\""+install+L"\\FeatherPad.exe\"";STARTUPINFOW si{};si.cb=sizeof(si);PROCESS_INFORMATION pi{};bool ok=CreateProcessW((install+L"\\FeatherPad.exe").c_str(),&command[0],nullptr,nullptr,FALSE,0,nullptr,install.c_str(),&si,&pi)!=FALSE;if(ok){CloseHandle(pi.hThread);CloseHandle(pi.hProcess);}return ok;};
  bool waited=false;HANDLE guard=nullptr;int code=1;std::wstring message;
  try{
-  wchar_t image[32768]{};DWORD size=32768;const auto expected=install+L"\\FeatherPad.exe";
-  if(!QueryFullProcessImageNameW(parent,0,image,&size)||CompareStringOrdinal(image,-1,expected.c_str(),-1,TRUE)!=CSTR_EQUAL)throw std::runtime_error("O processo de origem não corresponde à instalação: "+updates::utf8(image)+"; esperado: "+updates::utf8(expected));
+  wchar_t image[32768]{};DWORD size=32768;std::error_code identityError;const auto expected=install+L"\\FeatherPad.exe";
+  if(!QueryFullProcessImageNameW(parent,0,image,&size)||!std::filesystem::equivalent(std::filesystem::path(image),std::filesystem::path(expected),identityError))throw std::runtime_error("O processo de origem não corresponde à instalação: "+updates::utf8(image)+"; esperado: "+updates::utf8(expected));
   if(!SetEvent(ready))throw std::runtime_error("Não foi possível confirmar preparação.");
   CloseHandle(ready);ready=nullptr;
   if(WaitForSingleObject(parent,30000)!=WAIT_OBJECT_0)throw std::runtime_error("O launcher não encerrou a tempo. Nenhum arquivo foi alterado.");

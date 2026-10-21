@@ -28,17 +28,7 @@ jobs:
         shell: pwsh
         env:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-        run: |
-          $version = (Select-String -Path CMakeLists.txt -Pattern 'project\(FeatherPad VERSION ([0-9]+\.[0-9]+\.[0-9]+)').Matches.Groups[1].Value
-          if ($env:RELEASE_TAG -cne "v$version") { throw 'Tag must match the CMake stable version' }
-          $header = Get-Content src/update_common.h -Raw
-          if (-not $header.Contains("version=`"$version`"")) { throw 'Updater version does not match CMake' }
-          Copy-Item LEIA-ME.md,LICENSE build/Release/
-          New-Item release-assets -ItemType Directory -Force | Out-Null
-          Copy-Item build/Release/FeatherPad.exe,build/Release/Updater.exe,build/Release/SDL3.dll,LEIA-ME.md,LICENSE release-assets/
-          Copy-Item build/Release/licenses/SDL3.txt,build/Release/licenses/ViGEmClient.txt release-assets/
-          Compress-Archive -Path build/Release/FeatherPad.exe,build/Release/Updater.exe,build/Release/SDL3.dll,build/Release/licenses,build/Release/LEIA-ME.md,build/Release/LICENSE -DestinationPath "release-assets/FeatherPad-Windows-x64-$version.zip"
-          Get-ChildItem release-assets -File | Sort-Object Name | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" } | Set-Content release-assets/SHA256SUMS.txt -Encoding utf8
+        run: ./tools/package.ps1 -Tag $env:RELEASE_TAG
       - name: Publish stable release
         shell: pwsh
         env:

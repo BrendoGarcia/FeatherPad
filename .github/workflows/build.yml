@@ -3,7 +3,7 @@ on:
   pull_request:
   workflow_dispatch:
   push:
-    paths: ['src/**', 'tests/**', 'CMakeLists.txt', 'build.cmd', 'LEIA-ME.md', '.github/workflows/build.yml']
+    paths: ['src/**', 'tests/**', 'tools/**', 'CMakeLists.txt', 'build.cmd', 'LEIA-ME.md', '.github/workflows/build.yml']
 permissions:
   contents: read
 jobs:
@@ -18,9 +18,8 @@ jobs:
       - name: Verify migration, artwork, focus and controller translation
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Include instructions
-        run: |
-          Copy-Item LEIA-ME.md build/Release/LEIA-ME.md
-          Copy-Item LICENSE build/Release/LICENSE
+        shell: pwsh
+        run: ./tools/package.ps1
       - uses: actions/upload-artifact@v4
         with:
           name: FeatherPad-Windows-x64
