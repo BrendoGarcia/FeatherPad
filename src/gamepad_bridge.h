@@ -6,6 +6,7 @@ struct ControllerSource { unsigned id=0;std::wstring name,guid,key; };
 std::wstring bridgeBatteryStatus();
 size_t bridgePlayerCount();
 std::wstring bridgePlayerSummary();
+std::vector<std::wstring> bridgePlayerRows();
 extern bool controllerCompatibility;
 extern ControllerMode defaultControllerMode;
 extern std::wstring preferredControllerGuid;

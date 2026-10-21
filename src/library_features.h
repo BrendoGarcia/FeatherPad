@@ -1,6 +1,16 @@
 #pragma once
 constexpr UINT_PTR LIBRARY_TIMER=602;
 extern std::wstring collectionFilter;
+extern std::vector<std::wstring> collections;
+extern bool collectionsHome;
+extern int collectionPage;
+void loadCollections();
+std::wstring serializeCollections();
+bool saveCollection(const std::wstring& oldName,const std::wstring& newName);
+bool removeCollection(const std::wstring& name);
+void openCollection(size_t index);
+void showCollections();
+size_t collectionGameCount(const std::wstring& name);
 std::vector<std::wstring> splitCollections(const std::wstring& text);
 bool inCollection(const std::wstring& categories,const std::wstring& filter);
 std::wstring newLibraryId();

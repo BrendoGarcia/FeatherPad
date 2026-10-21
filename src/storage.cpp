@@ -14,7 +14,7 @@ bool validField(const std::wstring& s,size_t max) {
  return s.size()<=max && s.find_first_of(L"\r\n\0",0,3)==std::wstring::npos;
 }
 void loadDatabase() {
- games.clear();
+ games.clear();collections.clear();collectionFilter.clear();collectionsHome=false;
  controllerCompatibility=GetPrivateProfileIntW(L"Settings",L"ControllerCompatibility",0,ini.c_str())!=0;
  auto mode=GetPrivateProfileIntW(L"Settings",L"DefaultControllerMode",2,ini.c_str());
  defaultControllerMode=mode>=1&&mode<=3?static_cast<ControllerMode>(mode):ControllerMode::Xbox;
@@ -44,6 +44,7 @@ void loadDatabase() {
   g.favorite=GetPrivateProfileIntW(section.c_str(),L"Favorite",0,ini.c_str())!=0;
   if(!g.name.empty()&&!g.path.empty())games.push_back(std::move(g));
  }
+ loadCollections();
 }
 bool saveDatabase(HWND owner) {
  std::wstring s=L"[Settings]\r\nOpen="+std::to_wstring(openButton)+
@@ -61,6 +62,7 @@ bool saveDatabase(HWND owner) {
   field(L"Name",g.name);field(L"Path",g.path);field(L"Args",g.args);field(L"Dir",g.dir);
   field(L"Cover",g.cover);field(L"Note",g.note);s+=L"ControllerMode="+std::to_wstring(static_cast<int>(g.controllerMode))+L"\r\n";s+=L"Favorite="+std::wstring(g.favorite?L"1":L"0")+L"\r\n";
  }
+ s+=serializeCollections();
  s+=serializeControllerProfiles();
  const std::wstring tmp=ini+L".tmp";
  HANDLE file=CreateFileW(tmp.c_str(),GENERIC_WRITE,0,nullptr,CREATE_ALWAYS,FILE_ATTRIBUTE_NORMAL,nullptr);
@@ -136,7 +138,7 @@ void moveSelection(int delta) {
  selection=visibleGames[(pos+delta%count+count)%count]; keyboardFocus=-1;
  InvalidateRect(win,nullptr,FALSE);
 }
-void setFilter(bool favorites) { favoritesOnly=favorites;rebuildLibrary(selection); }
+void setFilter(bool favorites) { collectionsHome=false;collectionFilter.clear();favoritesOnly=favorites;rebuildLibrary(selection); }
 void toggleFavorite() {
  if(selection<0||selection>=static_cast<int>(games.size()))return;
  auto& g=games[selection];g.favorite=!g.favorite;
@@ -153,6 +155,6 @@ void launch() {
  SHELLEXECUTEINFOW s{};
  s.cbSize=sizeof(s);s.fMask=SEE_MASK_FLAG_NO_UI|SEE_MASK_NOCLOSEPROCESS;s.hwnd=win;s.lpVerb=L"open";s.lpFile=g.path.c_str();
  s.lpParameters=g.args.empty()?nullptr:g.args.c_str();s.lpDirectory=g.dir.empty()?nullptr:g.dir.c_str();s.nShow=SW_SHOWNORMAL;
- if(ShellExecuteExW(&s)){recordLaunch(static_cast<size_t>(selection),s.hProcess);hide();}
+ if(ShellExecuteExW(&s)){hideForGame();recordLaunch(static_cast<size_t>(selection),s.hProcess);}
  else if(!selfTesting)MessageBoxW(win,(L"Não foi possível abrir o jogo (erro "+std::to_wstring(GetLastError())+L"). Confira o executável, os argumentos e a pasta de trabalho em Editar jogo.").c_str(),L"FeatherPad",MB_ICONERROR);
 }

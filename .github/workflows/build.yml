@@ -37,5 +37,6 @@ jobs:
           name: FeatherPad-test-report
           path: |
             build/keyboard-preview.bmp
+            build/*-115.bmp
             build/self-test.log
             build/Testing/Temporary/LastTest.log

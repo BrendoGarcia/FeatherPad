@@ -1,4 +1,5 @@
 #include "app.h"
+#include "update_common.h"
 
 namespace {
  constexpr COLORREF bg=RGB(12,17,25),sidebar=RGB(16,23,33),surface=RGB(23,33,47);
@@ -6,10 +7,14 @@ namespace {
  constexpr COLORREF accent=RGB(100,229,193),ink=RGB(8,36,32),gold=RGB(255,207,112);
  HFONT smallFont=nullptr,bodyFont=nullptr,mediumFont=nullptr,titleFont=nullptr,heroFont=nullptr;
  HBRUSH bgBrush=nullptr,inputBrush=nullptr;
- HWND fields[6]{},profileField=nullptr,profilePathField=nullptr;
+ std::array<HWND,7> fields{};
+ HWND profileField=nullptr,profilePathField=nullptr;
  bool favoriteDraft=false;
- HWND gameModeCombo=nullptr,defaultModeCombo=nullptr,sourceCombo=nullptr,collectionCombo=nullptr;
- std::vector<std::wstring> collectionValues;
+ HWND gameModeCombo=nullptr,defaultModeCombo=nullptr,sourceCombo=nullptr;
+ HWND collectionNameField=nullptr;
+ std::wstring editingCollection;
+ ULONGLONG lastDeviceRefresh=0;
+ std::wstring profileSignature;
  HWND profileCombo=nullptr;
  std::vector<std::wstring> profileKeys,profileLabels;
  std::wstring sourceSignature;
@@ -47,13 +52,13 @@ namespace {
   SelectObject(dc,oldPen);SelectObject(dc,oldBrush);
   DeleteObject(separator);DeleteObject(outline);
  }
- void button(HDC dc,const std::wstring& text,RECT r,int id,bool primary=false,int game=-1) {
+ void button(HDC dc,const std::wstring& text,RECT r,int id,bool primary=false,int game=-1,int collection=-1) {
   const int hit=static_cast<int>(hits.size());
   const bool focus=keyboardFocus==hit,hover=hovered==hit;
   round(dc,r,primary?accent:(hover?RGB(42,58,77):RGB(31,44,60)),CLR_INVALID,10);
   label(dc,text,r,mediumFont,primary?ink:white,DT_CENTER|DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS);
   if(focus)focusRing(dc,r);
-  hits.push_back({r,id,game});
+  hits.push_back({r,id,game,collection});
  }
  void cover(HDC dc,const Game& g,RECT r,int index) {
   const auto* art=artFor(g.cover);
@@ -111,7 +116,7 @@ namespace {
   if(slash!=std::wstring::npos){SetWindowTextW(fields[3],p.substr(0,slash).c_str());if(textOf(fields[0]).empty())SetWindowTextW(fields[0],p.substr(slash+1).c_str());}
  }
  void saveEditor() {
-  Game g;g.name=textOf(fields[0]);g.categories=textOf(fields[6]);g.path=textOf(fields[1]);g.args=textOf(fields[2]);g.dir=textOf(fields[3]);g.note=textOf(fields[4]);g.cover=editingCover;
+  Game g;g.name=textOf(fields[0]);g.categories.clear();for(size_t i=0;i<collections.size();++i)if(SendMessageW(fields.at(6),LB_GETSEL,i,0)>0){if(!g.categories.empty())g.categories+=L"; ";g.categories+=collections[i];}g.path=textOf(fields[1]);g.args=textOf(fields[2]);g.dir=textOf(fields[3]);g.note=textOf(fields[4]);g.cover=editingCover;
   g.favorite=favoriteDraft;
   if(editorIndex>=0&&editorIndex<static_cast<int>(games.size())){g.id=games[editorIndex].id;g.launches=games[editorIndex].launches;g.lastLaunch=games[editorIndex].lastLaunch;g.playedSeconds=games[editorIndex].playedSeconds;}
   const auto chosen=SendMessageW(gameModeCombo,CB_GETCURSEL,0,0);
@@ -149,14 +154,44 @@ void initTheme() {
 void destroyTheme(){for(HFONT f:{smallFont,bodyFont,mediumFont,titleFont,heroFont})if(f)DeleteObject(f);if(bgBrush)DeleteObject(bgBrush);if(inputBrush)DeleteObject(inputBrush);}
 void darkTitle(HWND h){BOOL dark=TRUE;DwmSetWindowAttribute(h,20,&dark,sizeof(dark));DwmSetWindowAttribute(h,19,&dark,sizeof(dark));}
 void status(const std::wstring& message){notice=message;if(panel&&GetDlgItem(panel,451))SetWindowTextW(GetDlgItem(panel,451),message.c_str());if(win&&IsWindowVisible(win))InvalidateRect(win,nullptr,FALSE);}
+bool gameSessionActive=false;
+bool ensureTrayIcon(){
+ if(!win)return false;
+ tray.cbSize=sizeof(tray);tray.hWnd=win;tray.uID=1;tray.uFlags=NIF_MESSAGE|NIF_ICON|NIF_TIP;tray.uCallbackMessage=TRAY;
+ if(!tray.hIcon)tray.hIcon=LoadIconW(instance,MAKEINTRESOURCEW(101));
+ if(!tray.hIcon)tray.hIcon=LoadIconW(nullptr,IDI_APPLICATION);
+ const std::wstring tip=L"FeatherPad "+updates::wide(FEATHERPAD_VERSION)+L" · Sua biblioteca de jogos";
+ lstrcpynW(tray.szTip,tip.c_str(),static_cast<int>(std::size(tray.szTip)));
+ return Shell_NotifyIconW(NIM_MODIFY,&tray)||Shell_NotifyIconW(NIM_ADD,&tray);
+}
 void show(){
- bridgeSuspendForUI();
- // SW_RESTORE also unmaximizes a visible window. Only restore minimized ones;
- // SW_SHOW keeps both maximized geometry and the user's normal window size.
+ gameSessionActive=false;bridgeSuspendForUI();refreshSystemMetrics();
  ShowWindow(win,IsIconic(win)?SW_RESTORE:SW_SHOW);
  SetForegroundWindow(win);SetFocus(captureWin?captureWin:(panel?panel:win));InvalidateRect(win,nullptr,FALSE);
 }
-void hide(){if(panel||captureWin)return;bridgeSuspendForUI();ShowWindow(win,SW_HIDE);clearArt();}
+void autoShow(){if(!gameSessionActive&&!panel&&!captureWin&&!keyboardWindow)show();}
+void hide(){
+ // All owned windows must close before hiding the owner, including editors and keyboards.
+ if(panel)closePanel(false);
+ if(keyboardWindow)closeVirtualKeyboard(false,false);
+ if(captureWin)closeCapture(false);
+ bridgeSuspendForUI();const bool installed=ensureTrayIcon();ShowWindow(win,installed||selfTesting?SW_HIDE:SW_MINIMIZE);clearArt();
+}
+void hideForGame(){gameSessionActive=true;hide();}
+void drawNetworkStatus(HDC dc,RECT area,const NetworkSample& net){
+ round(dc,area,surface);
+ const int x=area.left+10,y=area.top+7;
+ if(net.kind==NetworkKind::WiFi){
+  const int bars=wifiBars(net.signalPercent);
+  for(int i=0;i<4;++i)fill(dc,box(x+i*6,y+19-(i+1)*4,4,(i+1)*4),bars>=i+1?accent:line);
+  if(bars<0)label(dc,L"?",box(x,y-1,24,24),smallFont,muted,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
+ }else if(net.kind==NetworkKind::Ethernet){
+  round(dc,box(x,y,22,15),bg,accent,3);fill(dc,box(x+10,y+15,2,5),accent);fill(dc,box(x+4,y+20,14,2),accent);
+ }else{
+  round(dc,box(x,y+2,22,18),bg,muted,3);label(dc,net.kind==NetworkKind::Offline?L"×":L"?",box(x,y,22,22),mediumFont,muted,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
+ }
+ label(dc,networkHeadline(net),box(x+33,area.top,area.right-x-39,area.bottom-area.top),smallFont,white);
+}
 
 void paintMain(HDC dc,RECT client) {
  const int w=client.right,h=client.bottom;hits.clear();
@@ -165,14 +200,14 @@ void paintMain(HDC dc,RECT client) {
  label(dc,L"F",box(26,28,34,34),titleFont,ink,DT_CENTER|DT_SINGLELINE|DT_VCENTER);
  label(dc,L"FeatherPad",box(72,26,126,38),mediumFont);
  label(dc,L"SEU ESPAÇO DE JOGOS",box(27,78,166,22),smallFont,muted);
- button(dc,L"Biblioteca",box(18,129,172,45),A_ALL,!favoritesOnly);
- button(dc,L"★   Favoritos",box(18,184,172,45),A_FAVORITES,favoritesOnly);
+ button(dc,L"Biblioteca",box(18,129,172,45),A_ALL,!collectionsHome&&collectionFilter.empty()&&!favoritesOnly);
+ button(dc,L"★   Favoritos",box(18,184,172,45),A_FAVORITES,!collectionsHome&&favoritesOnly);
  const auto favs=std::count_if(games.begin(),games.end(),[](const Game& g){return g.favorite;});
  label(dc,std::to_wstring(games.size())+L" jogos   ·   "+std::to_wstring(favs)+L" favoritos",box(27,246,166,22),smallFont,muted);
- button(dc,L"+  Adicionar jogo",box(18,285,172,43),A_ADD);
+ button(dc,collectionsHome?L"+  Nova coleção":L"+  Adicionar jogo",box(18,285,172,43),collectionsHome?A_NEW_COLLECTION:A_ADD);
  button(dc,searchQuery.empty()?L"Pesquisar jogos":L"Busca: "+searchQuery,box(18,340,172,43),A_SEARCH);
  button(dc,fullscreen?L"Sair da tela cheia":L"Tela cheia / TV",box(18,395,172,43),A_FULLSCREEN);
- button(dc,collectionFilter.empty()?L"Coleções":collectionFilter,box(18,450,172,36),A_COLLECTIONS);
+ button(dc,L"Coleções",box(18,450,172,36),A_COLLECTIONS,collectionsHome||!collectionFilter.empty());
  if(!searchQuery.empty())button(dc,L"Limpar pesquisa",box(18,495,172,36),A_CLEAR_SEARCH);
  label(dc,L"SEM PRESSA. SÓ JOGUE.",box(27,h-200,166,22),smallFont,muted);
  button(dc,L"Configurações",box(18,h-158,172,43),A_SETTINGS);
@@ -185,12 +220,29 @@ void paintMain(HDC dc,RECT client) {
  if(keyboardFocus==static_cast<int>(hits.size()))focusRing(dc,box(18,h-88,172,65));
  hits.push_back({box(18,h-88,172,65),A_PROFILE});
  const int x=242,cw=w-x-34;
- label(dc,L"BIBLIOTECA PESSOAL",box(x,25,cw-250,22),smallFont,accent);
- label(dc,L"Hora de jogar.",box(x,55,cw-250,52),heroFont);
- const bool connected=!devices.empty()||bridgeOwnsUI();
- round(dc,box(w-250,30,216,34),surface);
- label(dc,connected?L"●  Controle conectado":L"○  Conecte seu controle",box(w-240,30,196,34),smallFont,connected?accent:muted);
- label(dc,systemMetrics(),box(x,106,cw,20),smallFont,muted);
+ label(dc,collectionsHome?L"BIBLIOTECA DE TÓPICOS":collectionFilter.empty()?L"BIBLIOTECA PESSOAL":L"COLEÇÃO",box(x,25,cw-250,22),smallFont,accent);
+ label(dc,collectionsHome?L"Suas coleções.":collectionFilter.empty()?L"Hora de jogar.":collectionFilter,box(x,55,cw-250,52),heroFont);
+ drawNetworkStatus(dc,box(w-280,28,246,36),currentNetwork());
+ label(dc,L"Controles: "+std::to_wstring(bridgePlayerCount())+L" / 4",box(w-280,72,246,24),smallFont,muted);
+ label(dc,memoryHeadline(),box(x,106,240,20),smallFont,muted);
+ label(dc,bridgeBatteryStatus(),box(x+250,106,std::max(0,cw-250),20),smallFont,muted);
+ if(collectionsHome){
+  label(dc,L"Organize sua biblioteca em tópicos como Hardcore, Corrida ou Campanha.",box(x,138,cw,28),bodyFont,muted);
+  button(dc,L"+ Criar coleção",box(x,178,180,36),A_NEW_COLLECTION,true);
+  const int pages=std::max(1,(static_cast<int>(collections.size())+5)/6);collectionPage=std::clamp(collectionPage,0,pages-1);
+  label(dc,std::to_wstring(collectionPage+1)+L" / "+std::to_wstring(pages),box(w-190,180,60,30),smallFont,muted);
+  button(dc,L"‹",box(w-116,180,36,30),A_PREV);button(dc,L"›",box(w-70,180,36,30),A_NEXT);
+  const int cardWidth=(cw-20)/2,cardHeight=std::min(132,(h-310)/3);
+  for(int position=0;position<6;++position){const int index=collectionPage*6+position;if(index>=static_cast<int>(collections.size()))break;
+   const int left=x+(position%2)*(cardWidth+20),top=236+(position/2)*(cardHeight+14);const auto& name=collections[index];
+   button(dc,name,box(left,top,cardWidth,cardHeight-38),A_OPEN_COLLECTION,false,-1,index);
+   label(dc,std::to_wstring(collectionGameCount(name))+L" jogos",box(left+12,top+cardHeight-34,cardWidth-132,28),smallFont,muted);
+   button(dc,L"Gerenciar",box(left+cardWidth-116,top+cardHeight-34,116,28),A_EDIT_COLLECTION,false,-1,index);
+  }
+  if(collections.empty())label(dc,L"Crie sua primeira coleção. Ela pode ficar vazia até você atribuir jogos.",box(x,270,cw,120),bodyFont,muted,DT_CENTER|DT_WORDBREAK);
+  label(dc,L"Abra uma coleção para jogar. Atribua um jogo a uma ou mais coleções no editor, ou deixe sem coleção.",box(x,h-67,cw,45),smallFont,muted,DT_WORDBREAK);
+  return;
+ }
  const int heroY=130,heroH=230;
  RECT hero=box(x,heroY,cw,heroH);round(dc,hero,surface,line,18);
  if(selection>=0&&selection<static_cast<int>(games.size())) {
@@ -210,7 +262,7 @@ void paintMain(HDC dc,RECT client) {
   button(dc,favoritesOnly?L"Ver biblioteca":L"+ Adicionar jogo",box(x+28,heroY+173,180,38),favoritesOnly?A_ALL:A_ADD,true);
  }
  const int rowTitle=386,rowY=434;
- label(dc,favoritesOnly?L"Seus favoritos":L"Todos os jogos",box(x,rowTitle,320,30),titleFont);
+ label(dc,!collectionFilter.empty()?L"Jogos desta coleção":favoritesOnly?L"Seus favoritos":L"Todos os jogos",box(x,rowTitle,320,30),titleFont);
  label(dc,std::to_wstring(visibleGames.size())+L" na coleção",box(x+330,rowTitle,cw-440,30),smallFont,muted);
  button(dc,L"‹",box(w-116,rowTitle,36,30),A_PREV);button(dc,L"›",box(w-70,rowTitle,36,30),A_NEXT);
  const int columns=std::max(3,std::min(5,(cw+16)/160));
@@ -262,50 +314,59 @@ void drawButton(const DRAWITEMSTRUCT* item) {
 void openPage(Page requested,int gameIndex) {
  if(panel){SetForegroundWindow(captureWin?captureWin:panel);return;}
  show();page=requested;editorIndex=gameIndex;std::fill(std::begin(fields),std::end(fields),nullptr);
- const wchar_t* title=requested==Page::Editor?(gameIndex<0?L"Adicionar jogo":L"Editar jogo"):requested==Page::Profile?L"Seu perfil":requested==Page::Diagnostic?L"Controles e jogadores":requested==Page::Compatibility?L"Compatibilidade dos jogos":requested==Page::Collections?L"Coleções":requested==Page::Statistics?L"Estatísticas do jogo":L"Configurações";
- const int height=requested==Page::Editor?730:requested==Page::Profile?340:requested==Page::Diagnostic?300:requested==Page::Compatibility?580:640;
- panel=ownedWindow(L"FeatherPadPanel",title,650,height,win);if(!panel){page=Page::None;return;}
+ const wchar_t* title=requested==Page::Editor?(gameIndex<0?L"Adicionar jogo":L"Editar jogo"):requested==Page::Profile?L"Seu perfil":requested==Page::Diagnostic?L"Controles e jogadores":requested==Page::Compatibility?L"Compatibilidade dos jogos":requested==Page::Collections?L"Gerenciar coleção":requested==Page::Statistics?L"Estatísticas do jogo":requested==Page::Controls?L"Controles e atalhos":requested==Page::Players?L"Jogadores locais":requested==Page::General?L"Aplicativo":requested==Page::Metrics?L"Memória e rede":L"Configurações";
+ const int height=requested==Page::Editor?690:requested==Page::Profile?340:requested==Page::Diagnostic?380:requested==Page::Compatibility?580:requested==Page::Collections?340:600;
+ panel=ownedWindow(L"FeatherPadPanel",title,requested==Page::Editor?760:650,height,win);if(!panel){page=Page::None;return;}
  EnableWindow(win,FALSE);
  if(requested==Page::Editor) {
-  Game g;if(gameIndex>=0&&gameIndex<static_cast<int>(games.size()))g=games[gameIndex];editingCover=g.cover;
-  staticText(panel,gameIndex<0?L"Um novo jogo na sua coleção":L"Deixe este jogo com a sua cara",box(26,20,598,30));
+  Game g;if(gameIndex>=0&&gameIndex<static_cast<int>(games.size()))g=games[gameIndex];else if(!collectionFilter.empty())g.categories=collectionFilter;editingCover=g.cover;
+  staticText(panel,gameIndex<0?L"Adicionar à biblioteca":L"Editar jogo",box(26,14,708,26));
   const wchar_t* labels[]={L"Nome do jogo",L"Executável, atalho ou URI",L"Argumentos (opcional)",L"Pasta de trabalho (opcional)",L"Descrição curta (opcional)"};
   const std::wstring* values[]={&g.name,&g.path,&g.args,&g.dir,&g.note};
-  for(int i=0;i<5;++i){const int y=64+i*59;staticText(panel,labels[i],box(26,y,598,22));fields[i]=edit(panel,*values[i],box(26,y+26,i==1?462:598,30),400+i,i==4?160:8000);}
-  nativeButton(panel,L"Procurar...",box(500,154,124,30),A_BROWSE_GAME);
-  staticText(panel,L"Capa do jogo (PNG, JPG ou BMP)",box(26,365,598,22));
-  fields[6]=edit(panel,g.categories,box(26,391,598,30),406,240);
-  staticText(panel,L"Categorias / coleções (separe por ponto e vírgula)",box(26,430,598,22));
-  fields[5]=control(panel,L"EDIT",editingCover.empty()?L"Sem capa — será usada uma arte com o nome do jogo":editingCover,WS_BORDER|ES_AUTOHSCROLL|ES_READONLY,box(26,454,598,30),405);
-  nativeButton(panel,L"Escolher capa...",box(26,496,160,33),A_BROWSE_COVER);nativeButton(panel,L"Remover capa",box(198,496,148,33),A_CLEAR_COVER);
-  favoriteDraft=g.favorite;nativeButton(panel,L"Adicionar aos favoritos",box(365,496,259,33),A_DRAFT_FAVORITE);
-  staticText(panel,L"Controle para este jogo",box(26,542,204,24));
-  gameModeCombo=control(panel,L"COMBOBOX",L"",WS_TABSTOP|CBS_DROPDOWNLIST|WS_VSCROLL,box(242,538,382,150),440);
+  for(int i=0;i<5;++i){const int y=48+i*59;staticText(panel,labels[i],box(26,y,708,20));fields.at(i)=edit(panel,*values[i],box(26,y+23,i==1?562:708,29),400+i,i==4?160:8000);}
+  nativeButton(panel,L"Procurar...",box(600,130,134,29),A_BROWSE_GAME);
+  staticText(panel,L"Coleções (opcional)",box(26,350,340,22));
+  fields.at(6)=control(panel,L"LISTBOX",L"",WS_TABSTOP|WS_BORDER|WS_VSCROLL|LBS_EXTENDEDSEL|LBS_NOINTEGRALHEIGHT,box(26,378,340,132),406);
+  for(size_t i=0;i<collections.size();++i){SendMessageW(fields.at(6),LB_ADDSTRING,0,reinterpret_cast<LPARAM>(collections[i].c_str()));if(inCollection(g.categories,collections[i]))SendMessageW(fields.at(6),LB_SETSEL,TRUE,i);}
+  staticText(panel,collections.empty()?L"Crie tópicos na tela Coleções. O jogo também pode ficar sem coleção.":L"↑↓ escolhe · confirmar marca · ←→ troca de campo. Nenhuma seleção deixa o jogo só na biblioteca.",box(26,516,340,54));
+  staticText(panel,L"Capa do jogo",box(392,350,342,22));
+  fields.at(5)=control(panel,L"EDIT",editingCover.empty()?L"Sem capa":editingCover,WS_BORDER|ES_AUTOHSCROLL|ES_READONLY,box(392,378,342,30),405);
+  nativeButton(panel,L"Escolher capa",box(392,420,166,34),A_BROWSE_COVER);nativeButton(panel,L"Remover",box(570,420,164,34),A_CLEAR_COVER);
+  favoriteDraft=g.favorite;nativeButton(panel,L"Adicionar aos favoritos",box(392,468,342,34),A_DRAFT_FAVORITE);
+  staticText(panel,L"Formato do controle",box(392,516,342,22));
+  gameModeCombo=control(panel,L"COMBOBOX",L"",WS_TABSTOP|CBS_DROPDOWNLIST|WS_VSCROLL,box(392,544,342,150),440);
   for(const wchar_t* text:{L"Usar padrão global",L"Nativo — sem conversão",L"Xbox 360 virtual",L"PlayStation 4 virtual"})SendMessageW(gameModeCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(text));
   SendMessageW(gameModeCombo,CB_SETCURSEL,static_cast<WPARAM>(g.controllerMode),0);
-  staticText(panel,L"O padrão é aplicado sem configurar cada jogo. Ative a compatibilidade nas configurações. A capa é copiada para o perfil.",box(26,576,598,44));
-  if(gameIndex>=0)nativeButton(panel,L"Excluir da lista",box(26,648,148,34),A_DELETE_GAME);
-  nativeButton(panel,L"Cancelar",box(350,648,124,34),A_CLOSE_PANEL);nativeButton(panel,L"Salvar jogo",box(486,648,138,34),A_SAVE_GAME);
+  staticText(panel,L"As coleções organizam seus jogos em tópicos. As capas são copiadas para o perfil.",box(26,586,708,34));
+  if(gameIndex>=0)nativeButton(panel,L"Excluir da lista",box(26,638,148,34),A_DELETE_GAME);
+  nativeButton(panel,L"Cancelar",box(450,638,124,34),A_CLOSE_PANEL);nativeButton(panel,L"Salvar jogo",box(586,638,148,34),A_SAVE_GAME);
  } else if(requested==Page::Collections) {
-  staticText(panel,L"Filtre a biblioteca por uma categoria já usada nos seus jogos.",box(26,24,598,38));
-  collectionCombo=control(panel,L"COMBOBOX",L"",WS_TABSTOP|CBS_DROPDOWNLIST|WS_VSCROLL,box(26,90,598,230),460);
-  collectionValues={L"",L"Corrida",L"Multiplayer",L"Campanha",L"Emuladores"};
-  for(const auto& g:games)for(const auto& c:splitCollections(g.categories))if(std::none_of(collectionValues.begin(),collectionValues.end(),[&](const auto& v){return CompareStringOrdinal(v.c_str(),-1,c.c_str(),-1,TRUE)==CSTR_EQUAL;}))collectionValues.push_back(c);
-  SendMessageW(collectionCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Todas as coleções"));int selected=0;
-  for(size_t i=1;i<collectionValues.size();++i){SendMessageW(collectionCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(collectionValues[i].c_str()));if(collectionValues[i]==collectionFilter)selected=static_cast<int>(i);}
-  SendMessageW(collectionCombo,CB_SETCURSEL,selected,0);
-  staticText(panel,L"Adicione ou edite coleções no campo Categorias ao editar cada jogo. Um jogo pode pertencer a várias coleções.",box(26,350,598,58));
-  nativeButton(panel,L"Cancelar",box(350,590,124,34),A_CLOSE_PANEL);nativeButton(panel,L"Aplicar filtro",box(486,590,138,34),A_SAVE_COLLECTION);
+  editingCollection=gameIndex>=0&&gameIndex<static_cast<int>(collections.size())?collections[gameIndex]:L"";
+  staticText(panel,editingCollection.empty()?L"Nova coleção":L"Editar coleção",box(26,24,598,28));
+  staticText(panel,L"Nome do tópico (exemplo: Hardcore)",box(26,76,598,24));
+  collectionNameField=edit(panel,editingCollection,box(26,106,598,34),460,40);
+  staticText(panel,L"A coleção tem seu próprio espaço na biblioteca e pode ficar vazia. Ao adicionar ou editar um jogo, escolha a coleção ou deixe sem nenhuma.",box(26,158,598,58));
+  if(!editingCollection.empty())nativeButton(panel,L"Excluir coleção",box(26,272,164,34),A_DELETE_COLLECTION);
+  nativeButton(panel,L"Cancelar",box(350,272,124,34),A_CLOSE_PANEL);nativeButton(panel,L"Salvar coleção",box(486,272,138,34),A_SAVE_COLLECTION);
  } else if(requested==Page::Statistics) {
   staticText(panel,L"ESTATÍSTICAS DO JOGO",box(26,24,598,28));
   staticText(panel,gameStatistics(static_cast<size_t>(std::max(0,gameIndex))),box(26,68,598,280));
   nativeButton(panel,L"Concluir",box(486,590,138,34),A_CLOSE_PANEL);
  } else if(requested==Page::Settings) {
+  staticText(panel,L"CONFIGURAÇÕES",box(26,24,598,28));
+  staticText(panel,L"Escolha o que deseja ajustar.",box(26,64,598,28));
+  nativeButton(panel,L"Controles e atalhos",box(26,120,598,48),A_CONTROLS);
+  nativeButton(panel,L"Jogadores locais e conexões",box(26,182,598,48),A_PLAYERS);
+  nativeButton(panel,L"Compatibilidade dos jogos",box(26,244,598,48),A_COMPAT);
+  nativeButton(panel,L"Aplicativo, inicialização e atualizações",box(26,306,598,48),A_GENERAL);
+  nativeButton(panel,L"Memória e rede — leituras do Windows",box(26,368,598,48),A_METRICS);
+  nativeButton(panel,L"Concluir",box(486,546,138,34),A_CLOSE_PANEL);
+ } else if(requested==Page::Controls) {
   profileKeys.clear();profileLabels.clear();
   for(const auto& item:bridgeSources()){if(profileKeys.size()>=4)break;profileKeys.push_back(item.key);profileLabels.push_back(item.name);}
   for(const auto& entry:devices){if(profileKeys.size()>=4)break;const auto& key=entry.second.path;if(key.empty()||std::find(profileKeys.begin(),profileKeys.end(),key)!=profileKeys.end())continue;const auto slash=key.find_last_of(L"\\/#");profileKeys.push_back(key);profileLabels.push_back(slash==std::wstring::npos?key:key.substr(slash+1));}
   if(!profileKeys.empty()){const auto current=currentControllerProfile();auto it=std::find(profileKeys.begin(),profileKeys.end(),current);useControllerProfile(it==profileKeys.end()?profileKeys.front():*it);}
-  staticText(panel,L"CONTROLE",box(26,20,598,24));
+  staticText(panel,L"ATALHOS POR CONTROLE",box(26,20,598,24));
   staticText(panel,L"Escolha uma ação. Um pop-up vai aguardar o botão que você quiser usar.",box(26,52,598,42));
   const wchar_t* labels[]={L"Abrir / ocultar launcher",L"Confirmar / jogar",L"Voltar / ocultar",L"Favoritar jogo"};
   const unsigned bindings[]={*profileBinding(A_CAPTURE_OPEN),*profileBinding(A_CAPTURE_OK),*profileBinding(A_CAPTURE_BACK),*profileBinding(A_CAPTURE_STAR)};
@@ -315,19 +376,37 @@ void openPage(Page requested,int gameIndex) {
   if(profileKeys.empty()){SendMessageW(profileCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Conecte um controle"));SendMessageW(profileCombo,CB_SETCURSEL,0,0);}
   else {for(const auto& name:profileLabels)SendMessageW(profileCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(name.c_str()));auto selected=std::find(profileKeys.begin(),profileKeys.end(),currentControllerProfile());SendMessageW(profileCombo,CB_SETCURSEL,selected==profileKeys.end()?0:static_cast<int>(selected-profileKeys.begin()),0);}
   nativeButton(panel,L"Zona morta: "+std::to_wstring(profileDeadzone()),box(430,336,194,34),A_CALIBRATE);EnableWindow(GetDlgItem(panel,A_CALIBRATE),!profileKeys.empty());
-  nativeButton(panel,L"Controles conectados e jogadores locais",box(26,382,598,34),A_DIAG);
-  nativeButton(panel,L"Compatibilidade dos jogos...",box(26,426,598,34),A_COMPAT);
-  nativeButton(panel,L"Iniciar com o Windows (em segundo plano)",box(26,470,598,28),A_STARTUP);
-  nativeButton(panel,L"Mostrar a biblioteca ao conectar o controle",box(26,504,598,28),A_AUTOOPEN);
-  nativeButton(panel,L"Buscar atualizações",box(26,545,278,34),A_UPDATES);
-  nativeButton(panel,L"Tela cheia / TV (F11)",box(318,545,306,34),A_FULLSCREEN);
-  control(panel,L"STATIC",L"RAM, bateria e rede aparecem na tela principal. Acompanhe o tempo em Detalhes do jogo.",0,box(26,585,440,40),451);
-  nativeButton(panel,L"Concluir",box(486,585,138,34),A_CLOSE_PANEL);
+
+  staticText(panel,L"Escolha o perfil físico antes de alterar atalhos. A zona morta reduz movimentos involuntários dos analógicos.",box(26,392,598,50));
+  nativeButton(panel,L"Testar botões",box(26,468,190,34),A_DIAG);
+  nativeButton(panel,L"Voltar às configurações",box(26,546,250,34),A_SETTINGS_HOME);nativeButton(panel,L"Concluir",box(486,546,138,34),A_CLOSE_PANEL);
+ } else if(requested==Page::Players) {
+  staticText(panel,L"JOGADORES LOCAIS",box(26,24,598,28));
+  staticText(panel,L"Conecte até quatro controles por USB ou Bluetooth. Esta tela mostra as conexões; o teste de botões abre separadamente.",box(26,66,598,48));
+  for(int i=0;i<4;++i)control(panel,L"STATIC",L"Aguardando controle…",0,box(26,142+i*68,598,52),470+i);
+  control(panel,L"STATIC",L"",0,box(26,422,598,36),474);
+  nativeButton(panel,L"Testar botões",box(26,480,190,34),A_DIAG);
+  nativeButton(panel,L"Voltar às configurações",box(26,546,250,34),A_SETTINGS_HOME);nativeButton(panel,L"Concluir",box(486,546,138,34),A_CLOSE_PANEL);
+  refreshSettingsDevices();
+ } else if(requested==Page::General) {
+  staticText(panel,L"APLICATIVO",box(26,24,598,28));
+  nativeButton(panel,L"Iniciar com o Windows (na bandeja)",box(26,106,598,44),A_STARTUP);
+  nativeButton(panel,L"Mostrar ao conectar um controle",box(26,172,598,44),A_AUTOOPEN);
+  staticText(panel,L"Durante um jogo, novas conexões de controle não reabrem a biblioteca. Use o botão do controle ou o ícone na bandeja para voltar.",box(26,238,598,62));
+  nativeButton(panel,L"Buscar atualizações",box(26,340,286,42),A_UPDATES);nativeButton(panel,L"Tela cheia / TV (F11)",box(326,340,298,42),A_FULLSCREEN);
+  control(panel,L"STATIC",L"Fechar a janela mantém o monitor ativo na bandeja do Windows.",0,box(26,418,598,64),451);
+  nativeButton(panel,L"Voltar às configurações",box(26,546,250,34),A_SETTINGS_HOME);nativeButton(panel,L"Concluir",box(486,546,138,34),A_CLOSE_PANEL);
+ } else if(requested==Page::Metrics) {
+  refreshSystemMetrics(true);
+  staticText(panel,L"MEMÓRIA E REDE",box(26,20,598,28));
+  control(panel,L"STATIC",memoryDetails(),0,box(26,60,598,286),480);
+  control(panel,L"STATIC",networkDetails(),0,box(26,360,598,154),481);
+  nativeButton(panel,L"Voltar às configurações",box(26,546,250,34),A_SETTINGS_HOME);nativeButton(panel,L"Concluir",box(486,546,138,34),A_CLOSE_PANEL);
  } else if(requested==Page::Compatibility) {
   staticText(panel,L"Seu controle físico pode aparecer para os jogos como Xbox ou PlayStation. Você escolhe um padrão; exceções ficam salvas no jogo.",box(26,22,598,48));
   nativeButton(panel,L"Ativar compatibilidade de controles",box(26,82,598,38),A_COMPAT_TOGGLE);
   control(panel,L"STATIC",bridgeStatus(),0,box(26,138,598,68),430);
-  staticText(panel,L"Controle de origem (um jogador)",box(26,222,598,22));
+  staticText(panel,L"Controle de navegação (Jogador 1)",box(26,222,598,22));
   sourceCombo=control(panel,L"COMBOBOX",L"",WS_TABSTOP|CBS_DROPDOWNLIST|WS_VSCROLL,box(26,250,598,150),A_COMPAT_SOURCE);
   staticText(panel,L"Formato padrão enviado aos jogos",box(26,298,598,22));
   defaultModeCombo=control(panel,L"COMBOBOX",L"",WS_TABSTOP|CBS_DROPDOWNLIST|WS_VSCROLL,box(26,326,598,150),A_COMPAT_DEFAULT);
@@ -348,31 +427,28 @@ void openPage(Page requested,int gameIndex) {
   nativeButton(panel,L"Escolher imagem",box(26,229,162,34),A_BROWSE_AVATAR);nativeButton(panel,L"Remover",box(200,229,110,34),A_CLEAR_AVATAR);
   nativeButton(panel,L"Cancelar",box(350,288,124,34),A_CLOSE_PANEL);nativeButton(panel,L"Salvar perfil",box(486,288,138,34),A_SAVE_PROFILE);
  } else {
-  staticText(panel,L"Controles conectados e posições dos jogadores",box(26,24,598,26));
-  staticText(panel,bridgePlayerSummary(),box(26,62,598,26));
-  std::wstring names;unsigned player=1;for(const auto& item:bridgeSources()){if(player>4)break;if(!names.empty())names+=L"\r\n";names+=L"P"+std::to_wstring(player++)+L" · "+item.name;}
-  staticText(panel,names.empty()?L"Conecte os controles com compatibilidade ativa para ver as posições.":names,box(26,94,598,54));
-  staticText(panel,L"Pressione um controle por vez para conferir as entradas. No modo de compatibilidade, até quatro saídas virtuais independentes podem ser encaminhadas aos jogos.",box(26,156,598,48));
-  // The diagnostic output has its own ID, separate from decorative labels.
-  control(panel,L"STATIC",L"Aguardando uma entrada do controle…",0,box(26,132,598,64),420);
-  nativeButton(panel,L"Concluir",box(486,246,138,34),A_CLOSE_PANEL);
+  staticText(panel,L"TESTE DE BOTÕES",box(26,24,598,28));
+  staticText(panel,L"Pressione os botões para conferir as entradas. Voltar ou confirmar em Concluir encerra o teste.",box(26,66,598,48));
+  control(panel,L"STATIC",L"Aguardando uma entrada do controle…",0,box(26,142,598,100),420);
+  nativeButton(panel,L"Ver jogadores conectados",box(26,316,250,34),A_PLAYERS);
+  nativeButton(panel,L"Concluir",box(486,316,138,34),A_CLOSE_PANEL);
  }
- ShowWindow(panel,SW_SHOW);SetForegroundWindow(panel);SetFocus(GetNextDlgTabItem(panel,nullptr,FALSE));
+ ShowWindow(panel,SW_SHOW);SetForegroundWindow(panel);SetFocus(requested==Page::Players||requested==Page::Diagnostic?GetDlgItem(panel,A_CLOSE_PANEL):GetNextDlgTabItem(panel,nullptr,FALSE));
 }
-void closePanel() {
- if(keyboardWindow)closeVirtualKeyboard(false);
- if(captureWin)closeCapture();
+void closePanel(bool activate) {
+ if(keyboardWindow)closeVirtualKeyboard(false,activate);
+ if(captureWin)closeCapture(activate);
  if(!panel)return;
  HWND closing=panel;panel=nullptr;page=Page::None;
- EnableWindow(win,TRUE);DestroyWindow(closing);clearArt();SetForegroundWindow(win);SetFocus(win);InvalidateRect(win,nullptr,FALSE);
+ EnableWindow(win,TRUE);DestroyWindow(closing);clearArt();if(activate){SetForegroundWindow(win);SetFocus(win);}InvalidateRect(win,nullptr,FALSE);
 }
 void beginCapture(int requested) {
  if(captureWin)return;
  captureAction=requested;captureCandidate=0;captureArmed.clear();captureProfileKey.clear();
- if(page==Page::Settings&&!profileKeys.empty()){const auto selected=SendMessageW(profileCombo,CB_GETCURSEL,0,0);if(selected>=0&&selected<static_cast<LRESULT>(profileKeys.size()))captureProfileKey=profileKeys[static_cast<size_t>(selected)];}
+ if(page==Page::Controls&&!profileKeys.empty()){const auto selected=SendMessageW(profileCombo,CB_GETCURSEL,0,0);if(selected>=0&&selected<static_cast<LRESULT>(profileKeys.size()))captureProfileKey=profileKeys[static_cast<size_t>(selected)];}
  if(captureProfileKey.empty())captureProfileKey=currentControllerProfile();
  captureNotice=L"Pressione no controle o botão que vai "+std::wstring(requested==A_CAPTURE_OPEN?L"abrir o launcher.":requested==A_CAPTURE_OK?L"confirmar a seleção e iniciar um jogo.":requested==A_CAPTURE_BACK?L"voltar ou ocultar o launcher.":L"adicionar ou remover um jogo dos favoritos.");
- if(devices.empty()&&!selfTesting)captureNotice+=L"\n\nNenhum controle detectado. Conecte por Bluetooth ou USB para continuar.";
+ if(devices.empty()&&!bridgeOwnsUI()&&!selfTesting)captureNotice+=L"\n\nNenhum controle detectado. Conecte por Bluetooth ou USB para continuar.";
  captureWin=ownedWindow(L"FeatherPadCapture",L"Configurar botão do controle",534,326,panel?panel:win);
  if(!captureWin){captureAction=0;return;}
  EnableWindow(panel?panel:win,FALSE);
@@ -380,10 +456,10 @@ void beginCapture(int requested) {
  HWND save=nativeButton(captureWin,L"Salvar botão",box(368,274,138,34),A_CAPTURE_SAVE);EnableWindow(save,FALSE);
  ShowWindow(captureWin,SW_SHOW);SetForegroundWindow(captureWin);SetFocus(GetDlgItem(captureWin,A_CAPTURE_CANCEL));
 }
-void closeCapture() {
+void closeCapture(bool activate) {
  if(!captureWin)return;
  HWND closing=captureWin;captureWin=nullptr;captureAction=0;captureCandidate=0;captureArmed.clear();captureProfileKey.clear();
- EnableWindow(panel?panel:win,TRUE);DestroyWindow(closing);SetForegroundWindow(panel?panel:win);SetFocus(panel?panel:win);
+ EnableWindow(panel?panel:win,TRUE);DestroyWindow(closing);if(activate){SetForegroundWindow(panel?panel:win);SetFocus(panel?panel:win);}
 }
 void commitCapture() {
  if(!captureWin||!captureCandidate)return;
@@ -399,20 +475,31 @@ void action(int id) {
  case A_OPEN:show();break;
  case A_EXIT:if(panel)closePanel();DestroyWindow(win);break;
  case A_SETTINGS:openPage(Page::Settings);break;
+ case A_SETTINGS_HOME:closePanel();openPage(Page::Settings);break;
+ case A_CONTROLS:closePanel();openPage(Page::Controls);break;
+ case A_PLAYERS:closePanel();openPage(Page::Players);break;
+ case A_GENERAL:closePanel();openPage(Page::General);break;
+ case A_METRICS:closePanel();openPage(Page::Metrics);break;
  case A_COMPAT:closePanel();openPage(Page::Compatibility);break;
- case A_SEARCH:openVirtualKeyboard();break;
+ case A_SEARCH:if(collectionsHome){collectionsHome=false;collectionFilter.clear();rebuildLibrary();}openVirtualKeyboard();break;
  case A_CLEAR_SEARCH:searchQuery.clear();rebuildLibrary(selection);break;
  case A_FULLSCREEN:toggleFullscreen();break;
- case A_COLLECTIONS:openPage(Page::Collections);break;
+ case A_COLLECTIONS:if(panel)closePanel();showCollections();break;
+ case A_BACK_COLLECTIONS:showCollections();break;
+ case A_NEW_COLLECTION:openPage(Page::Collections);break;
+ case A_EDIT_COLLECTION:{auto it=std::find(collections.begin(),collections.end(),collectionFilter);if(it!=collections.end())openPage(Page::Collections,static_cast<int>(it-collections.begin()));break;}
  case A_GAME_DETAILS:if(selection>=0)openPage(Page::Statistics,selection);break;
- case A_SAVE_COLLECTION:{const auto chosen=SendMessageW(collectionCombo,CB_GETCURSEL,0,0);if(chosen>=0&&chosen<static_cast<LRESULT>(collectionValues.size())){collectionFilter=collectionValues[static_cast<size_t>(chosen)];closePanel();rebuildLibrary();}break;}
+ case A_SAVE_COLLECTION:{const auto name=textOf(collectionNameField);if(saveCollection(editingCollection,name)){closePanel();showCollections();}else if(!selfTesting)MessageBoxW(panel,L"Use um nome único de 1 a 40 caracteres, sem ponto e vírgula ou quebras de linha.",L"Confira a coleção",MB_ICONINFORMATION);break;}
+ case A_DELETE_COLLECTION:if(!editingCollection.empty()&&(selfTesting||MessageBoxW(panel,L"Excluir a coleção? Os jogos continuam na biblioteca.",L"Excluir coleção",MB_YESNO|MB_ICONQUESTION)==IDYES)&&removeCollection(editingCollection)){closePanel();showCollections();}break;
+
  case A_UPDATES:checkForUpdates();break;
  case A_ALL:setFilter(false);break;case A_FAVORITES:setFilter(true);break;
  case A_ADD:openPage(Page::Editor);break;
  case A_EDIT:if(selection>=0)openPage(Page::Editor,selection);break;
  case A_PLAY:launch();break;case A_STAR:toggleFavorite();break;
  case A_PROFILE:openPage(Page::Profile);break;
- case A_PREV:moveSelection(-1);break;case A_NEXT:moveSelection(1);break;
+ case A_PREV:if(collectionsHome){collectionPage=std::max(0,collectionPage-1);keyboardFocus=-1;InvalidateRect(win,nullptr,FALSE);}else moveSelection(-1);break;
+ case A_NEXT:if(collectionsHome){collectionPage=std::min(std::max(0,(static_cast<int>(collections.size())-1)/6),collectionPage+1);keyboardFocus=-1;InvalidateRect(win,nullptr,FALSE);}else moveSelection(1);break;
  case A_CLOSE_PANEL:closePanel();break;
  case A_SAVE_GAME:saveEditor();break;
  case A_BROWSE_GAME:browseGame();break;
@@ -498,6 +585,8 @@ LRESULT CALLBACK captureProc(HWND h,UINT m,WPARAM w,LPARAM l) {
  return DefWindowProcW(h,m,w,l);
 }
 LRESULT CALLBACK windowProc(HWND h,UINT m,WPARAM w,LPARAM l) {
+ static const UINT taskbarCreated=RegisterWindowMessageW(L"TaskbarCreated");
+ if(m==taskbarCreated){ensureTrayIcon();return 0;}
  switch(m) {
  case WM_ERASEBKGND:return 1;
  case WM_PAINT: {
@@ -513,22 +602,23 @@ LRESULT CALLBACK windowProc(HWND h,UINT m,WPARAM w,LPARAM l) {
  case WM_GETMINMAXINFO:{auto info=reinterpret_cast<MINMAXINFO*>(l);if(!fullscreen){info->ptMinTrackSize.x=1000;info->ptMinTrackSize.y=760;}return 0;}
  case WM_LBUTTONUP:case WM_LBUTTONDBLCLK: {
   POINT p=canvasPoint(POINT{GET_X_LPARAM(l),GET_Y_LPARAM(l)});
-  for(const auto& hit:hits)if(PtInRect(&hit.r,p)) {const auto copy=hit;if(copy.game>=0){selection=copy.game;keyboardFocus=-1;InvalidateRect(h,nullptr,FALSE);if(m==WM_LBUTTONDBLCLK)launch();}else action(copy.action);break;}
+  for(const auto& hit:hits)if(PtInRect(&hit.r,p)) {const auto copy=hit;if(copy.collection>=0){if(copy.action==A_EDIT_COLLECTION)openPage(Page::Collections,copy.collection);else openCollection(static_cast<size_t>(copy.collection));}else if(copy.game>=0){selection=copy.game;keyboardFocus=-1;InvalidateRect(h,nullptr,FALSE);if(m==WM_LBUTTONDBLCLK)launch();}else action(copy.action);break;}
   return 0; }
  case WM_MOUSEMOVE: {
   POINT p=canvasPoint(POINT{GET_X_LPARAM(l),GET_Y_LPARAM(l)});int index=-1;
   for(size_t i=0;i<hits.size();++i)if(PtInRect(&hits[i].r,p)){index=static_cast<int>(i);break;}
   if(index!=hovered){hovered=index;InvalidateRect(h,nullptr,FALSE);}SetCursor(LoadCursorW(nullptr,index<0?IDC_ARROW:IDC_HAND));return 0; }
  case WM_MOUSEWHEEL:moveSelection(GET_WHEEL_DELTA_WPARAM(w)>0?-1:1);return 0;
- case WM_TIMER:if(w==LIBRARY_TIMER){libraryTick();return 0;}if(w==GAMEPAD_TIMER){bridgeTick();return 0;}break;
+ case WM_TIMER:if(w==LIBRARY_TIMER){libraryTick();refreshSettingsDevices();return 0;}if(w==GAMEPAD_TIMER){bridgeTick();return 0;}break;
  case WM_INPUT:rawInput(l);return DefWindowProcW(h,m,w,l);
- case WM_INPUT_DEVICE_CHANGE:deviceChange(w,l);return 0;
+ case WM_INPUT_DEVICE_CHANGE:deviceChange(w,l);refreshSettingsDevices();return 0;
+ case METRICS_READY:refreshSettingsDevices();InvalidateRect(win,nullptr,FALSE);return 0;
  case WM_COMMAND:action(LOWORD(w));return 0;
  case UPDATE_READY:handleUpdateResult();return 0;
  case FINISH_CAPTURE:commitCapture();return 0;
  case WM_CLOSE:hide();return 0;
  case TRAY:if(l==WM_LBUTTONUP)show();else if(l==WM_RBUTTONUP)trayMenu();return 0;
- case WM_DESTROY:finishSessions();bridgeShutdown();clearArt();Shell_NotifyIconW(NIM_DELETE,&tray);PostQuitMessage(0);return 0;
+ case WM_DESTROY:shutdownSystemMetrics();finishSessions();bridgeShutdown();clearArt();Shell_NotifyIconW(NIM_DELETE,&tray);PostQuitMessage(0);return 0;
  }
  return DefWindowProcW(h,m,w,l);
 }
@@ -540,13 +630,13 @@ bool routeKey(MSG& msg) {
   if(msg.message==WM_KEYDOWN) {
    if(msg.wParam==VK_ESCAPE){if(captureWin)closeCapture();else closePanel();return true;}
    if(captureWin&&msg.wParam==VK_RETURN){if(GetFocus()==GetDlgItem(captureWin,A_CAPTURE_CANCEL))closeCapture();else commitCapture();return true;}
-   if(msg.wParam==VK_RETURN){HWND focus=GetFocus();wchar_t cls[32]{};GetClassNameW(focus,cls,32);if(lstrcmpiW(cls,L"BUTTON")==0)SendMessageW(focus,BM_CLICK,0,0);else if(page==Page::Editor)action(A_SAVE_GAME);else if(page==Page::Profile)action(A_SAVE_PROFILE);return true;}
+   if(msg.wParam==VK_RETURN){HWND focus=GetFocus();wchar_t cls[32]{};GetClassNameW(focus,cls,32);if(lstrcmpiW(cls,L"BUTTON")==0)SendMessageW(focus,BM_CLICK,0,0);else if(lstrcmpiW(cls,L"LISTBOX")==0){const auto caret=SendMessageW(focus,LB_GETCARETINDEX,0,0);if(caret>=0&&caret<SendMessageW(focus,LB_GETCOUNT,0,0))SendMessageW(focus,LB_SETSEL,SendMessageW(focus,LB_GETSEL,caret,0)<=0,caret);}else if(lstrcmpiW(cls,L"COMBOBOX")==0)SendMessageW(focus,CB_SHOWDROPDOWN,!SendMessageW(focus,CB_GETDROPPEDSTATE,0,0),0);else if(page==Page::Editor)action(A_SAVE_GAME);else if(page==Page::Profile)action(A_SAVE_PROFILE);else if(page==Page::Collections)action(A_SAVE_COLLECTION);return true;}
   }
   return IsDialogMessageW(target,&msg)!=FALSE;
  }
  if(msg.message!=WM_KEYDOWN||msg.hwnd!=win)return false;
  switch(msg.wParam) {
- case VK_ESCAPE:hide();return true;
+ case VK_ESCAPE:if(!collectionFilter.empty())showCollections();else hide();return true;
  case VK_LEFT:controllerDirection(-1,0);return true;case VK_RIGHT:controllerDirection(1,0);return true;
  case VK_UP:controllerDirection(0,-1);return true;case VK_DOWN:controllerDirection(0,1);return true;
  case VK_TAB:if(!hits.empty()){keyboardFocus=(keyboardFocus+((GetKeyState(VK_SHIFT)&0x8000)?-1:1)+static_cast<int>(hits.size()))%static_cast<int>(hits.size());InvalidateRect(win,nullptr,FALSE);}return true;
@@ -561,17 +651,20 @@ bool routeKey(MSG& msg) {
 void activateMain() {
  if(keyboardFocus>=0&&keyboardFocus<static_cast<int>(hits.size())) {
   const auto hit=hits[keyboardFocus];
-  if(hit.game>=0){selection=hit.game;launch();}else action(hit.action);
- } else launch();
+  if(hit.collection>=0){if(hit.action==A_EDIT_COLLECTION)openPage(Page::Collections,hit.collection);else openCollection(static_cast<size_t>(hit.collection));}else if(hit.game>=0){selection=hit.game;launch();}else action(hit.action);
+ } else if(collectionsHome){if(!collections.empty())openCollection(static_cast<size_t>(collectionPage*6));}else launch();
 }
 void controllerDirection(int dx,int dy) {
  if(keyboardWindow){keyboardDirection(dx,dy);return;}
  if(captureWin)return;
- if(panel){HWND next=GetNextDlgTabItem(panel,GetFocus(),dx<0||dy<0);if(next)SetFocus(next);return;}
+ if(panel){HWND focus=GetFocus();wchar_t cls[32]{};GetClassNameW(focus,cls,32);
+  if(dy&&lstrcmpiW(cls,L"LISTBOX")==0){const int count=static_cast<int>(SendMessageW(focus,LB_GETCOUNT,0,0));if(count>0){int caret=static_cast<int>(SendMessageW(focus,LB_GETCARETINDEX,0,0));SendMessageW(focus,LB_SETCARETINDEX,std::clamp(caret+dy,0,count-1),FALSE);}return;}
+  if(dy&&lstrcmpiW(cls,L"COMBOBOX")==0){const auto count=SendMessageW(focus,CB_GETCOUNT,0,0);const auto current=SendMessageW(focus,CB_GETCURSEL,0,0);if(count>0){SendMessageW(focus,CB_SETCURSEL,std::clamp<LRESULT>(current+dy,0,count-1),0);SendMessageW(panel,WM_COMMAND,MAKEWPARAM(GetDlgCtrlID(focus),CBN_SELCHANGE),reinterpret_cast<LPARAM>(focus));}return;}
+  HWND next=GetNextDlgTabItem(panel,focus,dx<0||dy<0);if(next)SetFocus(next);return;}
  int current=keyboardFocus;
  if(current<0||current>=static_cast<int>(hits.size())) {
   // Horizontal movement stays on the carousel and scrolls beyond visible cards.
-  if(dx){moveSelection(dx);return;}
+  if(dx&&!collectionsHome){moveSelection(dx);return;}
   auto it=std::find_if(hits.begin(),hits.end(),[](const Hit& hit){return hit.game==selection&&hit.game>=0;});
   if(it==hits.end()){keyboardFocus=0;InvalidateRect(win,nullptr,FALSE);return;}
   current=static_cast<int>(it-hits.begin());
@@ -615,10 +708,10 @@ void controllerButtons(HANDLE h,const std::set<USAGE>& now,const std::set<USAGE>
  }
  if(panel) {
   if(!selfTesting&&GetForegroundWindow()!=panel)return;
-  if(page==Page::Diagnostic){std::wstring s=now.empty()?L"Nenhum botão pressionado":L"Botões detectados:";for(auto b:now)s+=L"  "+std::to_wstring(b);HWND output=GetDlgItem(panel,420);if(textOf(output)!=s)SetWindowTextW(output,s.c_str());return;}
+  if(page==Page::Diagnostic){std::wstring s=now.empty()?L"Nenhum botão pressionado":L"Botões detectados:";for(auto b:now)s+=L"  "+std::to_wstring(b);HWND output=GetDlgItem(panel,420);if(textOf(output)!=s)SetWindowTextW(output,s.c_str());}
   for(auto b:now)if(!previous.count(b)) {
    if(b==*profileBinding(A_CAPTURE_BACK)){closePanel();return;}
-   if(b==*profileBinding(A_CAPTURE_OK)){HWND focused=GetFocus();wchar_t cls[32]{};GetClassNameW(focused,cls,32);if(lstrcmpiW(cls,L"BUTTON")==0)SendMessageW(focused,BM_CLICK,0,0);else if(lstrcmpiW(cls,L"EDIT")==0&&!(GetWindowLongPtrW(focused,GWL_STYLE)&ES_READONLY))openVirtualKeyboard(focused);return;}
+   if(b==*profileBinding(A_CAPTURE_OK)){HWND focused=GetFocus();wchar_t cls[32]{};GetClassNameW(focused,cls,32);if(lstrcmpiW(cls,L"BUTTON")==0)SendMessageW(focused,BM_CLICK,0,0);else if(lstrcmpiW(cls,L"LISTBOX")==0){const auto caret=SendMessageW(focused,LB_GETCARETINDEX,0,0);if(caret>=0&&caret<SendMessageW(focused,LB_GETCOUNT,0,0))SendMessageW(focused,LB_SETSEL,SendMessageW(focused,LB_GETSEL,caret,0)<=0,caret);}else if(lstrcmpiW(cls,L"COMBOBOX")==0)SendMessageW(focused,CB_SHOWDROPDOWN,!SendMessageW(focused,CB_GETDROPPEDSTATE,0,0),0);else if(lstrcmpiW(cls,L"EDIT")==0&&!(GetWindowLongPtrW(focused,GWL_STYLE)&ES_READONLY))openVirtualKeyboard(focused);return;}
   }
   return;
  }
@@ -641,4 +734,24 @@ void refreshBridgePanel() {
  for(const auto& entry:current){SendMessageW(sourceCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(entry.name.c_str()));sourceGuids.push_back(entry.guid);if(entry.guid==preferredControllerGuid)selected=static_cast<int>(sourceGuids.size())-1;}
  if(!preferredControllerGuid.empty()&&!selected){SendMessageW(sourceCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Controle preferido (desconectado)"));sourceGuids.push_back(preferredControllerGuid);selected=static_cast<int>(sourceGuids.size())-1;}
  SendMessageW(sourceCombo,CB_SETCURSEL,selected,0);
+}
+
+void refreshSettingsDevices(){
+ if(!panel)return;
+ if(page==Page::Metrics){SetWindowTextW(GetDlgItem(panel,480),memoryDetails().c_str());SetWindowTextW(GetDlgItem(panel,481),networkDetails().c_str());return;}
+ if(page==Page::Players){
+  const auto rows=bridgePlayerRows();
+  for(int i=0;i<4;++i){const auto text=i<static_cast<int>(rows.size())?rows[i]:L"P"+std::to_wstring(i+1)+L" · Aguardando conexão";HWND output=GetDlgItem(panel,470+i);if(textOf(output)!=text)SetWindowTextW(output,text.c_str());}
+  SetWindowTextW(GetDlgItem(panel,474),bridgeBatteryStatus().c_str());return;
+ }
+ if(page!=Page::Controls)return;
+ const auto now=GetTickCount64();if(now-lastDeviceRefresh<500)return;lastDeviceRefresh=now;
+ std::vector<std::wstring> keys,names;for(const auto& item:bridgeSources()){if(keys.size()>=4)break;keys.push_back(item.key);names.push_back(item.name);}
+ if(keys.empty())for(const auto& device:devices){if(keys.size()>=4)break;if(!device.second.path.empty()){keys.push_back(device.second.path);names.push_back(L"Controle físico "+std::to_wstring(keys.size()));}}
+ std::wstring signature;for(const auto& key:keys)signature+=key+L"|";if(signature==profileSignature)return;profileSignature=signature;
+ const auto selected=SendMessageW(profileCombo,CB_GETCURSEL,0,0);const auto old=selected>=0&&selected<static_cast<LRESULT>(profileKeys.size())?profileKeys[selected]:L"";
+ profileKeys=std::move(keys);profileLabels=std::move(names);SendMessageW(profileCombo,CB_RESETCONTENT,0,0);
+ if(profileKeys.empty()){SendMessageW(profileCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Conecte um controle"));SendMessageW(profileCombo,CB_SETCURSEL,0,0);EnableWindow(GetDlgItem(panel,A_CALIBRATE),FALSE);return;}
+ for(const auto& name:profileLabels)SendMessageW(profileCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(name.c_str()));
+ const auto found=std::find(profileKeys.begin(),profileKeys.end(),old);SendMessageW(profileCombo,CB_SETCURSEL,found==profileKeys.end()?0:static_cast<int>(found-profileKeys.begin()),0);EnableWindow(GetDlgItem(panel,A_CALIBRATE),TRUE);action(A_PLAYER_PROFILE);
 }

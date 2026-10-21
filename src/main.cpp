@@ -1,4 +1,5 @@
 #include "app.h"
+#include "update_common.h"
 
 HINSTANCE instance=nullptr;
 HWND win=nullptr,panel=nullptr,captureWin=nullptr;
@@ -16,12 +17,13 @@ bool autoOpen=false,favoritesOnly=false,selfTesting=false;
 IWICImagingFactory* imaging=nullptr;
 
 int WINAPI wWinMain(HINSTANCE h,HINSTANCE,LPWSTR args,int) {
+ if(std::wstring(args)==L"--launch-fixture"){Sleep(1200);return 0;}
  instance=h;selfTesting=std::wstring(args).find(L"--self-test")!=std::wstring::npos;
  HANDLE singleton=nullptr;
  if(!selfTesting) {
   singleton=CreateMutexW(nullptr,FALSE,L"Local\\FeatherPad.Singleton.v1");if(!singleton)return 1;
   if(GetLastError()==ERROR_ALREADY_EXISTS) {
-   HWND other=FindWindowW(L"FeatherPadWindow",nullptr);if(other){ShowWindow(other,IsIconic(other)?SW_RESTORE:SW_SHOW);SetForegroundWindow(other);}CloseHandle(singleton);return 0;
+   HWND other=FindWindowW(L"FeatherPadWindow",nullptr);if(other)PostMessageW(other,WM_COMMAND,A_OPEN,0);CloseHandle(singleton);return 0;
   }
  }
  const HRESULT com=CoInitializeEx(nullptr,COINIT_APARTMENTTHREADED);
@@ -43,7 +45,7 @@ int WINAPI wWinMain(HINSTANCE h,HINSTANCE,LPWSTR args,int) {
  wc.lpszClassName=L"FeatherPadPanel";wc.lpfnWndProc=panelProc;RegisterClassW(&wc);
  wc.lpszClassName=L"FeatherPadCapture";wc.lpfnWndProc=captureProc;RegisterClassW(&wc);
  RECT bounds{0,0,1180,780};AdjustWindowRect(&bounds,WS_OVERLAPPEDWINDOW,FALSE);
- win=CreateWindowExW(0,L"FeatherPadWindow",L"FeatherPad v1.1.0 — Sua biblioteca de jogos",WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN,CW_USEDEFAULT,CW_USEDEFAULT,bounds.right-bounds.left,bounds.bottom-bounds.top,nullptr,nullptr,h,nullptr);
+ win=CreateWindowExW(0,L"FeatherPadWindow",(L"FeatherPad v"+updates::wide(FEATHERPAD_VERSION)+L" — Sua biblioteca de jogos").c_str(),WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN,CW_USEDEFAULT,CW_USEDEFAULT,bounds.right-bounds.left,bounds.bottom-bounds.top,nullptr,nullptr,h,nullptr);
  int result=1;
  if(win) {
   darkTitle(win);rebuildLibrary();
@@ -51,16 +53,14 @@ int WINAPI wWinMain(HINSTANCE h,HINSTANCE,LPWSTR args,int) {
   else {
    bridgeReconfigure();SetTimer(win,LIBRARY_TIMER,1000,nullptr);
    if(!registerControllers())MessageBoxW(win,L"Não foi possível registrar os controles. Teclado e mouse continuam disponíveis.",L"FeatherPad",MB_ICONWARNING);
-   tray.cbSize=sizeof(tray);tray.hWnd=win;tray.uID=1;tray.uFlags=NIF_MESSAGE|NIF_ICON|NIF_TIP;tray.uCallbackMessage=TRAY;tray.hIcon=icon;
-   lstrcpyW(tray.szTip,L"FeatherPad v1.1.0— sua biblioteca de jogos");
-   if(!Shell_NotifyIconW(NIM_ADD,&tray))status(L"Não foi possível adicionar o ícone à bandeja.");
+   tray.hIcon=icon;if(!ensureTrayIcon())status(L"Não foi possível adicionar o ícone à bandeja.");
    if(std::wstring(args).find(L"--background")==std::wstring::npos)show();
    MSG msg{};int state;
    while((state=GetMessageW(&msg,nullptr,0,0))>0){if(!routeKey(msg)){TranslateMessage(&msg);DispatchMessageW(&msg);}}
    result=state==-1?1:0;
   }
  }
- shutdownUpdates();bridgeShutdown();clearArt();destroyTheme();if(imaging)imaging->Release();CoUninitialize();if(singleton)CloseHandle(singleton);
+ shutdownUpdates();shutdownSystemMetrics();bridgeShutdown();clearArt();destroyTheme();if(imaging)imaging->Release();CoUninitialize();if(singleton)CloseHandle(singleton);
  return result;
 }
 

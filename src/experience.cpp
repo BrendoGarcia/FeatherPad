@@ -108,10 +108,10 @@ bool keyboardGlyphsVisible(){
  for(int y=20;y<80;++y)for(int x=15;x<105;++x){auto c=GetPixel(dc,x,y);if(GetRValue(c)>160&&GetGValue(c)>160&&GetBValue(c)>160)++light;}
  bool corners=GetPixel(dc,0,0)==RGB(12,15,20);SelectObject(dc,old);DeleteObject(bitmap);DeleteDC(dc);ReleaseDC(keyboardWindow,screen);return light>20&&corners;
 }
-void closeVirtualKeyboard(bool apply){
+void closeVirtualKeyboard(bool apply,bool activate){
  if(!keyboardWindow)return;
  if(apply){auto value=textOf(keyboardEdit);if(destination&&IsWindow(destination))SetWindowTextW(destination,value.c_str());else{searchQuery=value;rebuildLibrary(selection);}}
- HWND closing=keyboardWindow;keyboardWindow=nullptr;EnableWindow(keyboardOwner,TRUE);DestroyWindow(closing);for(HFONT f:{keyFont,textFont,titleFont})if(f)DeleteObject(f);keyFont=textFont=titleFont=nullptr;SetForegroundWindow(keyboardOwner);SetFocus(destination&&IsWindow(destination)?destination:keyboardOwner);destination=nullptr;
+ HWND closing=keyboardWindow;keyboardWindow=nullptr;EnableWindow(keyboardOwner,TRUE);DestroyWindow(closing);for(HFONT f:{keyFont,textFont,titleFont})if(f)DeleteObject(f);keyFont=textFont=titleFont=nullptr;if(activate){SetForegroundWindow(keyboardOwner);SetFocus(destination&&IsWindow(destination)?destination:keyboardOwner);}destination=nullptr;
 }
 void keyboardDirection(int dx,int dy){
  if(!keyboardWindow)return;

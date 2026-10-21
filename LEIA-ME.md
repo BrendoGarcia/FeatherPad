@@ -1,31 +1,31 @@
-# FeatherPad 1.1.0 — multiplayer, perfis e biblioteca
+# FeatherPad 1.1.5 — correções de controles, coleções e bandeja
 
-## Multiplayer, perfis e biblioteca
+## Correções desta versão
 
-- **Multiplayer local:** quando a compatibilidade SDL/ViGEm está ativa, até quatro
-  controles reconhecidos podem alimentar saídas virtuais independentes. O Windows
-  atribui cada posição XInput disponível; a tela de diagnóstico mostra os dispositivos
-  e os índices que o sistema realmente concedeu. No modo nativo, o jogo recebe os
-  controles físicos diretamente. A compatibilidade continua sujeita às vagas livres
-  no driver virtual e ao suporte do jogo ao formato escolhido.
-- **Perfis por controle:** atalhos e zona morta dos analógicos são salvos pela identidade
-  do dispositivo (caminho HID, com GUID SDL como alternativa). Em dispositivos que não
-  reportam identidade persistente, reconectar por outra porta pode criar um perfil novo.
-  A opção Ajustar calibração alterna a zona morta entre níveis predefinidos.
-- **RAM e conectividade:** a tela principal informa memória privada e residente do
-  FeatherPad, estado de conectividade do Windows e bateria informada pelo controle.
-  Alguns modelos/drivers não disponibilizam o nível da bateria; nesses casos aparece
-  “n/d”. A conectividade usa o estado de rede do Windows e não testa um site externo.
-- **Categorias:** no editor de jogos, informe uma ou mais categorias separadas por
-  ponto e vírgula, por exemplo `Corrida; Multiplayer`. O botão Coleções filtra jogos
-  por essas categorias e oferece coleções comuns como Corrida, Campanha e Emuladores.
-- **Estatísticas:** Detalhes mostra último início e quantidade de aberturas confirmadas.
-  O tempo é acompanhado para executáveis `.exe` diretos enquanto o FeatherPad continua
-  aberto; atalhos, URIs e launchers externos podem não revelar qual processo é o jogo.
+- **Editor seguro:** corrigido acesso além do vetor de campos, que podia corromper o estado de outras janelas.
+- **Configurações organizadas:** menu com Controles e atalhos, Jogadores locais, Compatibilidade, Aplicativo e Memória/rede.
+- **Jogadores locais:** quatro espaços estáveis de conexão, sem teste automático, sem sobreposição e sem roubar o foco do botão Concluir. O teste de botões fica em uma tela explícita e também aceita Concluir/Voltar pelo controle.
+- **Bandeja:** iniciar um jogo fecha teclado e janelas auxiliares, oculta a biblioteca e mantém o serviço na bandeja. Conectar outros controles durante o jogo não abre a biblioteca novamente. O ícone é recriado quando o Explorer reinicia.
+- **Coleções como tópicos:** crie espaços como Hardcore, Corrida ou Campanha. Eles podem ficar vazios, ser renomeados ou excluídos sem apagar jogos. O editor permite atribuir cada jogo a uma ou mais coleções, ou deixar sem coleção. As categorias antigas são migradas para tópicos.
+- **RAM real:** a tela exibe RAM privada residente medida por QueryWorkingSet, com uma casa decimal em MiB. A página Memória/rede inclui bytes, PID, RAM residente total e memória privada comprometida lidos com GetProcessMemoryInfo. As medidas são diferentes e não são somadas. A consulta é refeita a cada segundo, sem extrapolação.
+- **Sinal de rede:** as quatro barras representam o percentual real de qualidade Wi-Fi fornecido pelo driver via WlanQueryInterface. Conexões Ethernet usam um ícone de cabo; redes desconhecidas não recebem barras inventadas. O acesso à internet é indicado separadamente conforme o Windows. A consulta à rede ocorre fora da thread da interface.
+- **Versão:** janela, ícone da bandeja, recursos do executável e pacote usam a versão 1.1.5 definida no CMake.
 
-O modo de compatibilidade cria uma saída virtual por jogador conectado, até quatro.
-O número XInput depende dos slots disponíveis no Windows; o FeatherPad não consegue
-reservar um índice ocupado por outro dispositivo ou emulador.
+## Uso das coleções
+
+1. Abra **Coleções** na barra lateral e escolha **Criar coleção**.
+2. Dê um nome ao tópico. Ele terá um cartão próprio, mesmo antes de conter jogos.
+3. Ao adicionar ou editar um jogo, marque as coleções desejadas. Nenhuma marcação é válida e mantém o jogo na biblioteca geral.
+4. Abra o cartão para acessar os jogos do tópico. **Gerenciar** permite renomear ou excluir apenas a coleção.
+5. Na lista de coleções do editor, ↑↓ move o cursor, confirmar marca/desmarca e ←→ troca de campo. Mouse e teclado também funcionam.
+
+## Medidas e limites
+
+As leituras de memória abrangem somente FeatherPad.exe, não o jogo, drivers ou processos externos. A RAM varia de fato quando capas, janelas e bibliotecas são carregadas. MiB significa 1.048.576 bytes. Para comparar com o Gerenciador de Tarefas, escolha o mesmo processo e a mesma coluna de memória, no mesmo instante.
+
+Alguns drivers ou permissões do Windows não disponibilizam a intensidade Wi-Fi ou a bateria do controle. Nesse caso aparece “indisponível”; não há valor simulado. As barras medem o enlace sem fio, não velocidade ou latência de internet.
+
+O multiplayer suporta até quatro entradas e saídas independentes quando a compatibilidade está ativa. As posições XInput são concedidas pelo Windows e podem estar ocupadas por outros dispositivos. Perfis de atalhos e zona morta usam a identidade física reportada pelo sistema. Estatísticas continuam acompanhando executáveis diretos enquanto o FeatherPad permanece aberto; processos-filhos e URIs podem não ser rastreáveis.
 
 - **Capas em tela cheia:** recortes arredondados agora usam um caminho GDI que acompanha
   a transformação da tela. Testes verificam pixels em 1366×768, 1920×1080 e 2560×1440.
