@@ -5,7 +5,7 @@
 #include <shellapi.h>
 #include <sstream>
 #include "fixtures/zip_fixture.h"
-int main(){
+int runTests(){
  // Run the real helper against a disposable installation, never the user's launcher.
  wchar_t self[32768]{};GetModuleFileNameW(nullptr,self,32768);
  std::filesystem::path selfPath(self);
@@ -72,9 +72,15 @@ int main(){
  write(root/L"same-install"/L"FeatherPad.exe","different");check(changedFiles(extracted,(root/L"same-install").wstring()).size()==1,"same internal version with changed executable remains detectable");
  auto zipMetadata=parseJson("{\"draft\":false,\"prerelease\":false,\"tag_name\":\"1.0.1\",\"assets\":[{\"name\":\"FeatherPad-Windows-x64.zip\",\"digest\":\"sha256:"+std::string(64,'a')+"\",\"size\":123,\"browser_download_url\":\"https://github.com/BrendoGarcia/FeatherPad/releases/download/1.0.1/FeatherPad-Windows-x64.zip\"}]}");
  check(releaseDistribution(zipMetadata).archive,"actual 1.0.1 ZIP-only release format is recognized despite internal 2.2 version");
- auto corrupt=std::vector<unsigned char>(std::begin(zipFixture),std::end(zipFixture));corrupt[50]^=255;
+ auto corrupt=std::vector<unsigned char>(std::begin(zipFixture),std::end(zipFixture));corrupt[44]^=255;
  {std::ofstream out(root/L"corrupt.zip",std::ios::binary);out.write(reinterpret_cast<const char*>(corrupt.data()),corrupt.size());}
  bool rejected=false;try{extractUpdateZip((root/L"corrupt.zip").wstring(),(root/L"extracted").wstring());}catch(...){rejected=true;}check(rejected,"corrupt ZIP payload is rejected before installation");
+
+ auto unsafe=std::vector<unsigned char>(std::begin(zipFixture),std::end(zipFixture));
+ const std::string original="FeatherPad.exe",traversal="../evilapp.exe";
+ for(auto pos=std::search(unsafe.begin(),unsafe.end(),original.begin(),original.end());pos!=unsafe.end();pos=std::search(pos+original.size(),unsafe.end(),original.begin(),original.end()))std::copy(traversal.begin(),traversal.end(),pos);
+ {std::ofstream out(root/L"unsafe.zip",std::ios::binary);out.write(reinterpret_cast<const char*>(unsafe.data()),unsafe.size());}
+ rejected=false;try{extractUpdateZip((root/L"unsafe.zip").wstring(),(root/L"extracted").wstring());}catch(...){rejected=true;}check(rejected&&!std::filesystem::exists(root/L"evilapp.exe"),"ZIP traversal cannot write outside staging");
  // Real Updater process: inherited handle survives parent exit; restart uses original path.
  auto e2e=root/L"e2e",install=e2e/L"install",stage=e2e/L"stage";
  std::filesystem::create_directories(install);std::filesystem::create_directory(stage);
@@ -94,3 +100,5 @@ int main(){
  for(int i=0;i<20;++i){std::filesystem::remove_all(root,ec);if(!ec)break;Sleep(50);}
  return failed?1:0;
 }
+
+int main(){std::cout<<std::unitbuf;try{return runTests();}catch(const std::exception& e){std::cerr<<"FAIL unexpected exception: "<<e.what()<<std::endl;return 1;}}

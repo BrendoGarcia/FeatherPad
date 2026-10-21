@@ -40,6 +40,7 @@ namespace {
   SelectObject(dc,textFont);SetTextColor(dc,RGB(155,167,182));RECT help{28,r.bottom-32,r.right-28,r.bottom-8};DrawTextW(dc,L"Direcional: mover   ·   Confirmar: digitar   ·   Voltar: cancelar   ·   ↵: aplicar",-1,&help,DT_CENTER|DT_SINGLELINE|DT_VCENTER);SelectObject(dc,old);
  }
  void drawKey(const DRAWITEMSTRUCT* item){
+  HBRUSH backgroundBrush=CreateSolidBrush(RGB(12,15,20));FillRect(item->hDC,&item->rcItem,backgroundBrush);DeleteObject(backgroundBrush);
   const int code=item->CtlID-700;bool focused=(item->itemState&ODS_FOCUS)!=0,disabled=(item->itemState&ODS_DISABLED)!=0;
   bool primary=code==64,active=code==62&&upper,hovered=hoverKey==code;
   COLORREF color=disabled?RGB(22,26,32):(focused?RGB(100,229,193):primary||active?RGB(44,109,94):hovered?RGB(70,77,87):RGB(45,51,61));
@@ -47,6 +48,12 @@ namespace {
   RECT r=item->rcItem;InflateRect(&r,-3,-3);RoundRect(item->hDC,r.left,r.top,r.right,r.bottom,24,24);
   SelectObject(item->hDC,oldB);SelectObject(item->hDC,oldP);DeleteObject(brush);DeleteObject(pen);
   auto old=SelectObject(item->hDC,code>=63&&code<=69&&code!=68?textFont:keyFont);SetBkMode(item->hDC,TRANSPARENT);SetTextColor(item->hDC,focused?RGB(8,36,32):RGB(245,247,250));
+  if(code==60||code==62){
+   const int cx=(r.left+r.right)/2,cy=(r.top+r.bottom)/2;HPEN icon=CreatePen(PS_SOLID,2,focused?RGB(8,36,32):RGB(245,247,250));auto previousPen=SelectObject(item->hDC,icon),previousBrush=SelectObject(item->hDC,GetStockObject(HOLLOW_BRUSH));
+   if(code==60){POINT outline[]={{cx-25,cy},{cx-11,cy-16},{cx+25,cy-16},{cx+25,cy+16},{cx-11,cy+16},{cx-25,cy}};Polyline(item->hDC,outline,6);MoveToEx(item->hDC,cx-1,cy-7,nullptr);LineTo(item->hDC,cx+13,cy+7);MoveToEx(item->hDC,cx+13,cy-7,nullptr);LineTo(item->hDC,cx-1,cy+7);}
+   else {POINT outline[]={{cx,cy-20},{cx+17,cy},{cx+7,cy},{cx+7,cy+18},{cx-7,cy+18},{cx-7,cy},{cx-17,cy},{cx,cy-20}};Polyline(item->hDC,outline,8);}
+   SelectObject(item->hDC,previousBrush);SelectObject(item->hDC,previousPen);DeleteObject(icon);SelectObject(item->hDC,old);return;
+  }
   auto text=textOf(item->hwndItem);DrawTextW(item->hDC,text.c_str(),static_cast<int>(text.size()),&r,DT_CENTER|DT_VCENTER|DT_SINGLELINE);SelectObject(item->hDC,old);
  }
  LRESULT CALLBACK keyProc(HWND h,UINT m,WPARAM w,LPARAM l){
@@ -109,7 +116,7 @@ void keyboardConfirm(){if(keyboardWindow){int code=GetDlgCtrlID(GetFocus())-700;
 bool keyboardRoute(MSG& msg){
  if(!keyboardWindow||(msg.hwnd!=keyboardWindow&&!IsChild(keyboardWindow,msg.hwnd)))return false;
  if(msg.message==WM_CHAR&&GetFocus()!=keyboardEdit&&msg.wParam>=32){wchar_t c=static_cast<wchar_t>(msg.wParam);auto text=std::wstring(1,c);SendMessageW(keyboardEdit,EM_REPLACESEL,TRUE,reinterpret_cast<LPARAM>(text.c_str()));return true;}
- if(msg.message==WM_KEYDOWN){if(msg.wParam==VK_ESCAPE){closeVirtualKeyboard(false);return true;}if(msg.wParam==VK_RETURN){if(GetFocus()==keyboardEdit)closeVirtualKeyboard(true);else keyboardConfirm();return true;}if(GetFocus()!=keyboardEdit){switch(msg.wParam){case VK_LEFT:keyboardDirection(-1,0);return true;case VK_RIGHT:keyboardDirection(1,0);return true;case VK_UP:keyboardDirection(0,-1);return true;case VK_DOWN:keyboardDirection(0,1);return true;case VK_BACK:eraseSelection();return true;case VK_SPACE:SendMessageW(keyboardEdit,EM_REPLACESEL,TRUE,reinterpret_cast<LPARAM>(L" "));return true;}}}
+ if(msg.message==WM_KEYDOWN){if(msg.wParam==VK_ESCAPE){closeVirtualKeyboard(false);return true;}if(msg.wParam==VK_RETURN){closeVirtualKeyboard(GetDlgCtrlID(GetFocus())!=765);return true;}if(GetFocus()!=keyboardEdit){switch(msg.wParam){case VK_LEFT:keyboardDirection(-1,0);return true;case VK_RIGHT:keyboardDirection(1,0);return true;case VK_UP:keyboardDirection(0,-1);return true;case VK_DOWN:keyboardDirection(0,1);return true;case VK_BACK:eraseSelection();return true;case VK_SPACE:SendMessageW(keyboardEdit,EM_REPLACESEL,TRUE,reinterpret_cast<LPARAM>(L" "));return true;}}}
  return IsDialogMessageW(keyboardWindow,&msg)!=FALSE;
 }
 void toggleFullscreen(){
