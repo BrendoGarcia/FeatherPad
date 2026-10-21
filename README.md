@@ -321,7 +321,7 @@ A biblioteca suporta até **2000 jogos**, descrições de até **160 caracteres*
 
 ### Privacidade e remoção
 
-Não há login, telemetria, coleta de perfil ou download automático de capas. O aplicativo não baixa bibliotecas em tempo de execução. Links de ajuda abrem páginas externas por ação do usuário; jogos e clientes de lojas têm suas próprias necessidades de rede.
+Não há login, telemetria, coleta de perfil ou download automático de capas. Bibliotecas acompanham o pacote; novas versões podem ser baixadas quando você solicita uma atualização. Links de ajuda abrem páginas externas por ação do usuário; jogos e clientes de lojas têm suas próprias necessidades de rede.
 
 Para remover o launcher, desative **Iniciar com o Windows**, encerre o monitor e apague a pasta do programa. Se desejar apagar seus dados, remova também `%LOCALAPPDATA%\FeatherPad`. Os jogos instalados não são excluídos. Drivers opcionais são componentes separados e possuem sua própria desinstalação.
 

@@ -6,19 +6,21 @@ std::wstring searchQuery;
 bool fullscreen=false;
 namespace {
  HWND destination=nullptr,keyboardEdit=nullptr,keyboardOwner=nullptr;HFONT keyboardFont=nullptr;
- bool upper=false;int keyFocus=0;WINDOWPLACEMENT placement{};
+ bool upper=false,symbols=false;int keyFocus=0;WINDOWPLACEMENT placement{};
  LONG_PTR oldStyle=0,oldExStyle=0;
  const std::wstring letters=L"qwertyuiopasdfghjklçzxcvbnm,.-0123456789@_:/\\\"'!?=áàâãéêíóôõ";
- const wchar_t* commands[]={L"Apagar",L"Espaço",L"Maiúsculas",L"Limpar",L"Aplicar",L"Cancelar",L"← cursor",L"cursor →",L"Início",L"Fim"};
- void refreshKeys(){for(int i=0;i<60;++i){wchar_t c=letters[i];if(upper)CharUpperBuffW(&c,1);SetWindowTextW(GetDlgItem(keyboardWindow,700+i),std::wstring(1,c).c_str());}}
+ const std::wstring symbolKeys=LR"KEYS(!"#$%&'()*+,-./:;<=>?@[\]^_`{|}~áàâãäéèêëíìîïóòôõöúùûüñç€£ªº)KEYS";
+ const wchar_t* commands[]={L"Apagar",L"Espaço",L"Maiúsculas",L"Limpar",L"Aplicar",L"Cancelar",L"← cursor",L"cursor →",L"Símbolos",L"Fim"};
+ void refreshKeys(){for(int i=0;i<60;++i){wchar_t c=(symbols?symbolKeys:letters)[i];if(upper)CharUpperBuffW(&c,1);SetWindowTextW(GetDlgItem(keyboardWindow,700+i),std::wstring(1,c).c_str());}}
  void chooseKey(int index){keyFocus=std::max(0,std::min(69,index));SetFocus(GetDlgItem(keyboardWindow,700+keyFocus));}
  void press(int i){
   if(i==64){closeVirtualKeyboard(true);return;}if(i==65){closeVirtualKeyboard(false);return;}
+  if(i==68){symbols=!symbols;refreshKeys();return;}
   if(i>=66){DWORD a=0,b=0;SendMessageW(keyboardEdit,EM_GETSEL,reinterpret_cast<WPARAM>(&a),reinterpret_cast<LPARAM>(&b));int pos=i==66?std::max(0,static_cast<int>(a)-1):i==67?std::min(GetWindowTextLengthW(keyboardEdit),static_cast<int>(b)+1):i==68?0:GetWindowTextLengthW(keyboardEdit);SendMessageW(keyboardEdit,EM_SETSEL,pos,pos);return;}
   if(i==62){upper=!upper;refreshKeys();return;}
   if(i==63){SetWindowTextW(keyboardEdit,L"");return;}
   if(i==60){DWORD a=0,b=0;SendMessageW(keyboardEdit,EM_GETSEL,reinterpret_cast<WPARAM>(&a),reinterpret_cast<LPARAM>(&b));if(a==b&&a>0)SendMessageW(keyboardEdit,EM_SETSEL,a-1,b);SendMessageW(keyboardEdit,EM_REPLACESEL,TRUE,reinterpret_cast<LPARAM>(L""));return;}
-  wchar_t c=i==61?L' ':letters[i];if(upper)CharUpperBuffW(&c,1);
+  wchar_t c=i==61?L' ':(symbols?symbolKeys:letters)[i];if(upper)CharUpperBuffW(&c,1);
   const auto s=std::wstring(1,c);SendMessageW(keyboardEdit,EM_REPLACESEL,TRUE,reinterpret_cast<LPARAM>(s.c_str()));
  }
  LRESULT CALLBACK keyboardProc(HWND h,UINT m,WPARAM w,LPARAM l){
@@ -37,7 +39,7 @@ bool gameMatchesSearch(const std::wstring& name,const std::wstring& query){
 }
 void openVirtualKeyboard(HWND target){
  if(keyboardWindow){SetForegroundWindow(keyboardWindow);return;}
- destination=target;keyboardOwner=panel?panel:win;upper=false;keyFocus=0;
+ destination=target;keyboardOwner=panel?panel:win;upper=false;symbols=false;keyFocus=0;
  WNDCLASSW c{};c.hInstance=instance;c.hCursor=LoadCursorW(nullptr,IDC_ARROW);c.lpfnWndProc=keyboardProc;c.lpszClassName=L"FeatherPadKeyboard";RegisterClassW(&c);
  MONITORINFO monitor{};monitor.cbSize=sizeof(monitor);GetMonitorInfoW(MonitorFromWindow(keyboardOwner,MONITOR_DEFAULTTONEAREST),&monitor);
  int width=std::min(1100L,monitor.rcWork.right-monitor.rcWork.left),height=std::min(680L,monitor.rcWork.bottom-monitor.rcWork.top);

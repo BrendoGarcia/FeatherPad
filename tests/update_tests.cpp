@@ -3,6 +3,7 @@
 #include <fstream>
 #include <iostream>
 #include <shellapi.h>
+#include <sstream>
 int main(){
  // Run the real helper against a disposable installation, never the user's launcher.
  wchar_t self[32768]{};GetModuleFileNameW(nullptr,self,32768);
@@ -12,10 +13,11 @@ int main(){
   if(argc==3&&std::wstring(argv[1])==L"--fixture-parent"){
    std::wstring stage=argv[2],install=selfPath.parent_path().wstring();
    HANDLE parent=OpenProcess(SYNCHRONIZE|PROCESS_QUERY_LIMITED_INFORMATION,TRUE,GetCurrentProcessId());
-   std::wstring exe=stage+L"\\runner.exe",cmd=L"\""+exe+L"\" "+std::to_wstring(reinterpret_cast<UINT_PTR>(parent))+L" \""+install+L"\"";
+   SECURITY_ATTRIBUTES attributes{sizeof(SECURITY_ATTRIBUTES),nullptr,TRUE};HANDLE ready=CreateEventW(&attributes,TRUE,FALSE,nullptr);
+   std::wstring exe=stage+L"\\runner.exe",cmd=L"\""+exe+L"\" "+std::to_wstring(reinterpret_cast<UINT_PTR>(parent))+L" \""+install+L"\" "+std::to_wstring(reinterpret_cast<UINT_PTR>(ready));
    STARTUPINFOW si{};si.cb=sizeof(si);PROCESS_INFORMATION pi{};
    bool ok=CreateProcessW(exe.c_str(),&cmd[0],nullptr,nullptr,TRUE,0,nullptr,stage.c_str(),&si,&pi)!=FALSE;
-   if(ok){CloseHandle(pi.hThread);CloseHandle(pi.hProcess);}if(parent)CloseHandle(parent);LocalFree(argv);return ok?0:1;
+   if(ok){HANDLE signals[]={ready,pi.hProcess};ok=WaitForMultipleObjects(2,signals,FALSE,10000)==WAIT_OBJECT_0;CloseHandle(pi.hThread);CloseHandle(pi.hProcess);}if(ready)CloseHandle(ready);if(parent)CloseHandle(parent);LocalFree(argv);return ok?0:1;
   }
   if(argv)LocalFree(argv);
   std::ofstream(selfPath.parent_path()/L"restarted.txt")<<"restarted";return 0;
@@ -28,6 +30,16 @@ int main(){
  check(parseJson("{\"tag_name\":\"v2.3.0\",\"assets\":[],\"text\":\"a\\\"b\\u00e7\"}").at("text").string()=="a\"b\xc3\xa7","JSON escapes and Unicode");
  for(auto bad:{"{","{\"x\":1,\"x\":2}","{} trailing","[1,]"}){bool rejected=false;try{parseJson(bad);}catch(...){rejected=true;}check(rejected,"reject malformed or duplicate JSON");}
  check(allowedPath(L"../FeatherPad.exe").empty()&&allowedPath(L"library.ini").empty()&&allowedPath(L"SDL3.txt")==L"licenses\\SDL3.txt","fixed update allowlist protects user data");
+
+ auto releaseJson=[](const std::string& host,bool complete){
+  std::string s="{\"draft\":false,\"prerelease\":false,\"assets\":[";
+  const char* names[]={"FeatherPad.exe","Updater.exe","SDL3.dll","LICENSE","LEIA-ME.md","SDL3.txt","ViGEmClient.txt"};
+  for(int i=0;i<(complete?7:6);++i){if(i)s+=",";s+="{\"name\":\""+std::string(names[i])+"\",\"size\":3,\"digest\":\"sha256:"+std::string(64,'a')+"\",\"browser_download_url\":\""+host+"/v2.3.0/"+names[i]+"\"}";}return s+"]}";
+ };
+ check(releaseFiles(parseJson(releaseJson("https://github.com/BrendoGarcia/FeatherPad/releases/download",true))).size()==7,"complete official release accepted");
+ for(const auto& payload:{releaseJson("https://evil.example/releases/download",true),releaseJson("https://github.com/BrendoGarcia/FeatherPad/releases/download",false)}){
+  bool rejected=false;try{releaseFiles(parseJson(payload));}catch(...){rejected=true;}check(rejected,"foreign host or incomplete release rejected");
+ }
  const auto root=std::filesystem::temp_directory_path()/(L"FeatherPad-update-test-"+std::to_wstring(GetCurrentProcessId()));std::filesystem::remove_all(root);std::filesystem::create_directories(root/L"stage");std::filesystem::create_directory(root/L"install");
  auto write=[](const std::filesystem::path& p,const char* s){std::ofstream o(p,std::ios::binary);o<<s;};
  write(root/L"stage"/L"LICENSE","abc");File f;f.name=L"LICENSE";f.path=L"LICENSE";f.size=3;f.hash="ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad";

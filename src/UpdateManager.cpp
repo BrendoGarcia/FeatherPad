@@ -67,9 +67,15 @@ void handleUpdateResult(){
  const auto install=updates::executableDirectory();
  HANDLE parent=OpenProcess(SYNCHRONIZE|PROCESS_QUERY_LIMITED_INFORMATION,FALSE,GetCurrentProcessId());
  if(!parent||!SetHandleInformation(parent,HANDLE_FLAG_INHERIT,HANDLE_FLAG_INHERIT)){if(parent)CloseHandle(parent);MessageBoxW(owner,L"Não foi possível preparar o processo para atualizar.",L"FeatherPad",MB_ICONERROR);return;}
- std::wstring command=L"\""+result.stage+L"\\runner.exe\" "+std::to_wstring(reinterpret_cast<UINT_PTR>(parent))+L" \""+install+L"\"";
+ SECURITY_ATTRIBUTES attributes{sizeof(SECURITY_ATTRIBUTES),nullptr,TRUE};
+ HANDLE ready=CreateEventW(&attributes,TRUE,FALSE,nullptr);if(!ready){CloseHandle(parent);return;}
+ std::wstring command=L"\""+result.stage+L"\\runner.exe\" "+std::to_wstring(reinterpret_cast<UINT_PTR>(parent))+L" \""+install+L"\" "+std::to_wstring(reinterpret_cast<UINT_PTR>(ready));
  STARTUPINFOW si{};si.cb=sizeof(si);PROCESS_INFORMATION pi{};
- if(!CreateProcessW((result.stage+L"\\runner.exe").c_str(),&command[0],nullptr,nullptr,TRUE,0,nullptr,result.stage.c_str(),&si,&pi)){CloseHandle(parent);MessageBoxW(owner,L"Não foi possível iniciar o atualizador. O launcher continua aberto.",L"FeatherPad",MB_ICONERROR);return;}
- CloseHandle(parent);CloseHandle(pi.hThread);CloseHandle(pi.hProcess);if(keyboardWindow)closeVirtualKeyboard(false);closePanel();DestroyWindow(win);
+ if(!CreateProcessW((result.stage+L"\\runner.exe").c_str(),&command[0],nullptr,nullptr,TRUE,0,nullptr,result.stage.c_str(),&si,&pi)){CloseHandle(parent);CloseHandle(ready);MessageBoxW(owner,L"Não foi possível iniciar o atualizador. O launcher continua aberto.",L"FeatherPad",MB_ICONERROR);return;}
+ HANDLE signals[]={ready,pi.hProcess};DWORD state=WaitForMultipleObjects(2,signals,FALSE,10000);
+ CloseHandle(parent);CloseHandle(ready);CloseHandle(pi.hThread);CloseHandle(pi.hProcess);
+ if(state!=WAIT_OBJECT_0){MessageBoxW(owner,L"O atualizador não confirmou a preparação. O launcher permanece aberto e a instalação não foi substituída.",L"FeatherPad",MB_ICONERROR);return;}
+ if(keyboardWindow)closeVirtualKeyboard(false);
+ closePanel();DestroyWindow(win);
 }
 void shutdownUpdates(){stopping=true;if(worker.joinable())worker.join();}
