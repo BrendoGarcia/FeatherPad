@@ -1,5 +1,6 @@
 name: Build Windows
 on:
+  pull_request:
   workflow_dispatch:
   push:
     paths: ['src/**', 'tests/**', 'CMakeLists.txt', 'build.cmd', 'LEIA-ME.md', '.github/workflows/build.yml']
@@ -17,12 +18,16 @@ jobs:
       - name: Verify migration, artwork, focus and controller translation
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Include instructions
-        run: Copy-Item LEIA-ME.md build/Release/LEIA-ME.md
+        run: |
+          Copy-Item LEIA-ME.md build/Release/LEIA-ME.md
+          Copy-Item LICENSE build/Release/LICENSE
       - uses: actions/upload-artifact@v4
         with:
           name: FeatherPad-Windows-x64
           path: |
             build/Release/FeatherPad.exe
+            build/Release/Updater.exe
+            build/Release/LICENSE
             build/Release/SDL3.dll
             build/Release/licenses/
             build/Release/LEIA-ME.md

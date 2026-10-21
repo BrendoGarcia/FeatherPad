@@ -27,7 +27,7 @@ namespace {
   std::set<USAGE> now(buttons,buttons+count),previous=d->previous;d->previous=now;
   controllerButtons(handle,now,previous);
   const HWND foreground=GetForegroundWindow();
-  if(captureWin||!IsWindowVisible(win)||IsIconic(win)||(foreground!=win&&foreground!=panel)) {d->direction=0;return;}
+  if(captureWin||!IsWindowVisible(win)||IsIconic(win)||(foreground!=win&&foreground!=panel&&foreground!=keyboardWindow)) {d->direction=0;return;}
   if(panel&&page==Page::Diagnostic){d->direction=0;return;}
   int hatDirection=0,xDirection=0,yDirection=0;
   for(const auto& v:d->values) {

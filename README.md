@@ -6,14 +6,14 @@
 
 Um launcher nativo para Windows que reúne seus jogos, permite navegar pelo controle e oferece conversão de entradas para jogos com diferentes formatos de gamepad.
 
-[![Build Windows](https://github.com/BrendoGarcia/Games/actions/workflows/build.yml/badge.svg)](https://github.com/BrendoGarcia/Games/actions/workflows/build.yml)
+[![Build Windows](https://github.com/BrendoGarcia/FeatherPad/actions/workflows/build.yml/badge.svg)](https://github.com/BrendoGarcia/FeatherPad/actions/workflows/build.yml)
 ![Windows](https://img.shields.io/badge/Windows-10%20%2F%2011%20x64-0078D4)
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C)
 [![Licença MIT](https://img.shields.io/badge/Licen%C3%A7a-MIT-green.svg)](LICENSE)
 
 **Interface nativa · Biblioteca com capas · Favoritos · Controle USB/Bluetooth · Build pelo GitHub**
 
-[📦 Downloads](https://github.com/BrendoGarcia/Games/releases) · [⚙️ Compilar pelo GitHub](#️-build-pelo-github-sem-instalar-compilador) · [📖 Guia operacional](LEIA-ME.md) · [🐛 Relatar problema](https://github.com/BrendoGarcia/Games/issues)
+[📦 Downloads](https://github.com/BrendoGarcia/FeatherPad/releases) · [⚙️ Compilar pelo GitHub](#️-build-pelo-github-sem-instalar-compilador) · [📖 Guia operacional](LEIA-ME.md) · [🐛 Relatar problema](https://github.com/BrendoGarcia/FeatherPad/issues)
 
 </div>
 
@@ -49,6 +49,10 @@ Além de organizar e abrir jogos, o launcher pode ler um controle compatível e 
 
 | Recurso | O que você pode fazer |
 |---|---|
+| **Pesquisa por nome** | Encontrar jogos por partes do título, ignorando maiúsculas e acentos, inclusive nos Favoritos. |
+| **Teclado virtual** | Pesquisar e editar campos de texto pelo controle, com aplicação/cancelamento e cursor. |
+| **Tela cheia / TV** | Usar a biblioteca sem bordas, com escala dos elementos e restauração da janela pelo F11. |
+| **Atualização pelo aplicativo** | Consultar Releases, baixar arquivos alterados com SHA-256 e aplicar pelo Updater separado. |
 | **Biblioteca visual** | Navegar por cartões com capas, carrossel e destaque do jogo selecionado. |
 | **Cadastro de jogos** | Adicionar executáveis, atalhos, URLs e URIs de lojas, com argumentos e pasta de trabalho opcionais. |
 | **Favoritos** | Marcar seus jogos preferidos e acessar uma coleção filtrada. |
@@ -78,9 +82,9 @@ Não é necessário instalar ferramentas de desenvolvimento para usar um pacote 
 
 ### Baixar e abrir
 
-1. Acesse [Releases](https://github.com/BrendoGarcia/Games/releases) e procure um pacote Windows compilado. Se ainda não houver uma release, use o [GitHub Actions](#️-build-pelo-github-sem-instalar-compilador).
+1. Acesse [Releases](https://github.com/BrendoGarcia/FeatherPad/releases) e procure um pacote Windows compilado. Se ainda não houver uma release, use o [GitHub Actions](#️-build-pelo-github-sem-instalar-compilador).
 2. Extraia **todo o conteúdo** do pacote para uma pasta fixa, por exemplo `C:\Apps\FeatherPad`.
-3. Mantenha `SDL3.dll` ao lado de `FeatherPad.exe` e preserve a pasta `licenses` e as instruções distribuídas.
+3. Mantenha `SDL3.dll` e `Updater.exe` ao lado de `FeatherPad.exe` e preserve a pasta `licenses` e as instruções distribuídas.
 4. Execute `FeatherPad.exe`.
 5. Clique em **Adicionar jogo**, informe o nome e o caminho e salve.
 6. Conecte o controle, confira os botões em **Configurações** e selecione **Jogar agora**.
@@ -90,6 +94,14 @@ Não é necessário instalar ferramentas de desenvolvimento para usar um pacote 
 A compatibilidade de controles vem **desativada inicialmente**. Para ativá-la, siga o [guia abaixo](#-compatibilidade-de-controles-nos-jogos).
 
 ## 🖼️ Biblioteca, capas e favoritos
+
+### Novidades de uso na versão 2.2
+
+Use **Pesquisar jogos** na barra lateral (ou **F3/Q**) para abrir o teclado virtual e filtrar nomes. **Aplicar** confirma e **Cancelar/Voltar** preserva a busca anterior. **Limpar pesquisa** remove o filtro. A busca combina com Favoritos.
+
+Em campos editáveis de cadastro/perfil, **Confirmar** no controle abre o teclado virtual. Ele tem letras, números, acentos, símbolos, maiúsculas, apagar e movimento do cursor. Aplicar preenche o campo; salvar o formulário continua sendo uma ação separada.
+
+**Tela cheia / TV**, também disponível nas configurações e por **F11**, ocupa o monitor sem bordas, escala os elementos e restaura a janela anterior ao sair.
 
 ### Adicionar ou editar um jogo
 
@@ -243,6 +255,18 @@ O FeatherPad não configura o HidHide automaticamente. No primeiro teste, feche 
 
 > **Dependência externa:** ViGEmBus e ViGEmClient são projetos aposentados. A integração é opcional e utiliza a versão oficial 1.22.0 do driver, que removeu o atualizador legado. Consulte o [aviso de fim de vida](https://docs.nefarius.at/projects/ViGEm/End-of-Life/) e evite antigos atualizadores.
 
+## 🔄 Atualização dentro do launcher
+
+Em **Configurações > Buscar atualizações**, o FeatherPad consulta a última Release estável pública, compara versões e oferece o download. Apenas arquivos com tamanho/hash diferentes são baixados; cada arquivo alterado é baixado inteiro.
+
+Depois de validar os digests SHA-256 fornecidos pelo GitHub, o launcher solicita confirmação para reiniciar. Uma cópia do `Updater.exe` instalado aguarda o encerramento, preserva os arquivos anteriores para recuperação, aplica os arquivos permitidos e reabre o programa. A biblioteca do usuário não é substituída. Evite atualizar durante uma partida, pois o monitor será encerrado.
+
+**Para migrar de uma versão anterior a 2.2, baixe o pacote completo uma vez**, incluindo `Updater.exe`. Depois disso, as versões futuras podem ser instaladas pelo botão, desde que a Release contenha os assets individuais produzidos pelo workflow **Release Windows**. A versão 2.1 não consegue atualizar a si mesma por esse mecanismo.
+
+As consultas são manuais. HTTPS valida a origem e SHA-256 verifica a integridade; **não há assinatura digital independente do publicador**. O mecanismo confia na conta/release oficial do GitHub. Release privada/incompleta, digest ausente, falha de rede ou permissões insuficientes geram aviso. Não há token embutido nem elevação automática.
+
+Recuperações e logs ficam em `%LOCALAPPDATA%\FeatherPad\updates`. Consulte o [guia de atualização e publicação](LEIA-ME.md) para rollback e os sete assets necessários. Publicar código na branch não disponibiliza, por si só, uma atualização: o mantenedor precisa publicar uma Release compilada.
+
 ## 🌙 Segundo plano e inicialização com Windows
 
 Pareie o controle pelo próprio Windows antes de usar Bluetooth. O launcher lê os dispositivos apresentados pelo sistema; não realiza o pareamento por conta própria.
@@ -303,7 +327,7 @@ Para remover o launcher, desative **Iniciar com o Windows**, encerre o monitor e
 
 ## ⚙️ Build pelo GitHub sem instalar compilador
 
-O workflow [**Build Windows**](https://github.com/BrendoGarcia/Games/actions/workflows/build.yml) compila e executa testes em um runner Windows do GitHub.
+O workflow [**Build Windows**](https://github.com/BrendoGarcia/FeatherPad/actions/workflows/build.yml) compila e executa testes em um runner Windows do GitHub.
 
 ### Baixar uma compilação existente
 
@@ -312,7 +336,7 @@ O workflow [**Build Windows**](https://github.com/BrendoGarcia/Games/actions/wor
 3. Em **Artifacts**, baixe **FeatherPad-Windows-x64**. O GitHub exige login para baixar artefatos.
 4. Extraia o pacote inteiro e execute `FeatherPad.exe`.
 
-O pacote inclui EXE, `SDL3.dll`, licenças das dependências e `LEIA-ME.md`. Os logs ficam em **FeatherPad-test-report**. Artefatos têm retenção limitada pelo GitHub; releases são o local indicado para disponibilizar versões aos usuários.
+O pacote inclui EXE, `Updater.exe`, `SDL3.dll`, licenças das dependências e `LEIA-ME.md`. Os logs ficam em **FeatherPad-test-report**. Artefatos têm retenção limitada pelo GitHub; releases são o local indicado para disponibilizar versões aos usuários.
 
 ### Gerar sua própria compilação
 
@@ -349,8 +373,8 @@ O executável não é assinado digitalmente. O projeto não distribui silenciosa
 No **x64 Native Tools Command Prompt for VS**:
 
 ```cmd
-git clone https://github.com/BrendoGarcia/Games.git
-cd Games
+git clone https://github.com/BrendoGarcia/FeatherPad.git
+cd FeatherPad
 build.cmd
 ```
 
@@ -397,7 +421,7 @@ Os testes da CI não instalam o driver virtual. Portanto, não substituem testes
 
 Consulte também o [guia operacional detalhado](LEIA-ME.md).
 
-Ao [abrir uma issue](https://github.com/BrendoGarcia/Games/issues), informe versão/commit, versão do Windows, modelo do controle, USB ou Bluetooth, modo de saída, mensagem de status e passos para reproduzir. Evite anexar sua biblioteca inteira sem revisar caminhos e dados pessoais.
+Ao [abrir uma issue](https://github.com/BrendoGarcia/FeatherPad/issues), informe versão/commit, versão do Windows, modelo do controle, USB ou Bluetooth, modo de saída, mensagem de status e passos para reproduzir. Evite anexar sua biblioteca inteira sem revisar caminhos e dados pessoais.
 
 ## 🤝 Código, contribuições e licença
 
@@ -405,6 +429,9 @@ Ao [abrir uma issue](https://github.com/BrendoGarcia/Games/issues), informe vers
 
 | Arquivo/pasta | Responsabilidade |
 |---|---|
+| `src/experience.cpp` | Pesquisa, teclado virtual e tela cheia. |
+| `src/UpdateManager.cpp` | Consulta HTTPS e download das atualizações. |
+| `src/Updater.cpp` | Substituição dos arquivos, recuperação e reinicialização. |
 | `src/main.cpp` | Inicialização, instância única e loop de mensagens. |
 | `src/ui.cpp` | Biblioteca, formulários, foco e navegação. |
 | `src/input.cpp` | Entrada HID/Raw Input. |

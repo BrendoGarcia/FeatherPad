@@ -114,7 +114,7 @@ void toggleStartup() {
 }
 void rebuildLibrary(int preferred) {
  visibleGames.clear();
- for(size_t i=0;i<games.size();++i)if(!favoritesOnly||games[i].favorite)visibleGames.push_back(static_cast<int>(i));
+ for(size_t i=0;i<games.size();++i)if((!favoritesOnly||games[i].favorite)&&gameMatchesSearch(games[i].name,searchQuery))visibleGames.push_back(static_cast<int>(i));
  if(preferred>=0)selection=preferred;
  if(std::find(visibleGames.begin(),visibleGames.end(),selection)==visibleGames.end())selection=visibleGames.empty()?-1:visibleGames.front();
  firstVisible=0;keyboardFocus=-1;

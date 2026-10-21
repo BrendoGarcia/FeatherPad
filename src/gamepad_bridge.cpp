@@ -184,7 +184,7 @@ namespace {
   stateMessage(std::wstring(activeMode==ControllerMode::Xbox?L"Xbox 360 virtual ativo — ":L"PlayStation 4 virtual ativo — ")+wide(api.SDL_GetGamepadName(source))+L". Pronto para jogos compatíveis com esse formato.");
   return true;
  }
- bool uiVisible() {return panel||captureWin||(win&&IsWindowVisible(win)&&!IsIconic(win));}
+ bool uiVisible() {return keyboardWindow||panel||captureWin||(win&&IsWindowVisible(win)&&!IsIconic(win));}
  void routeUI(const PadState& s) {
   std::set<USAGE> buttons;
   const std::uint32_t positions[]={PadWest,PadSouth,PadEast,PadNorth,PadLShoulder,PadRShoulder,0,0,PadBack,PadStart,PadLStick,PadRStick,PadGuide,PadTouch};
@@ -253,7 +253,7 @@ void bridgeTick() {
  if(!targetAttached&&client&&activeMode!=ControllerMode::Native)ensureTarget();
  const PadState state=readState(source);routeUI(state);if(started!=epoch||!source)return;
  const HWND foreground=GetForegroundWindow();
- if(!captureWin&&(foreground==win||foreground==panel)) {
+ if(!captureWin&&(foreground==win||foreground==panel||foreground==keyboardWindow)) {
   static int lastDirection=0;static ULONGLONG nextDirection=0;int direction=0;
   if(state.buttons&PadLeft)direction=-1;else if(state.buttons&PadRight)direction=1;else if(state.buttons&PadUp)direction=-2;else if(state.buttons&PadDown)direction=2;
   else if(state.lx<-16000)direction=-1;else if(state.lx>16000)direction=1;else if(state.ly<-16000)direction=-2;else if(state.ly>16000)direction=2;

@@ -140,7 +140,7 @@ void initTheme() {
 }
 void destroyTheme(){for(HFONT f:{smallFont,bodyFont,mediumFont,titleFont,heroFont})if(f)DeleteObject(f);if(bgBrush)DeleteObject(bgBrush);if(inputBrush)DeleteObject(inputBrush);}
 void darkTitle(HWND h){BOOL dark=TRUE;DwmSetWindowAttribute(h,20,&dark,sizeof(dark));DwmSetWindowAttribute(h,19,&dark,sizeof(dark));}
-void status(const std::wstring& message){notice=message;if(win&&IsWindowVisible(win))InvalidateRect(win,nullptr,FALSE);}
+void status(const std::wstring& message){notice=message;if(panel&&GetDlgItem(panel,451))SetWindowTextW(GetDlgItem(panel,451),message.c_str());if(win&&IsWindowVisible(win))InvalidateRect(win,nullptr,FALSE);}
 void show(){
  bridgeSuspendForUI();
  // SW_RESTORE also unmaximizes a visible window. Only restore minimized ones;
@@ -162,6 +162,9 @@ void paintMain(HDC dc,RECT client) {
  const auto favs=std::count_if(games.begin(),games.end(),[](const Game& g){return g.favorite;});
  label(dc,std::to_wstring(games.size())+L" jogos   ·   "+std::to_wstring(favs)+L" favoritos",box(27,246,166,22),smallFont,muted);
  button(dc,L"+  Adicionar jogo",box(18,285,172,43),A_ADD);
+ button(dc,searchQuery.empty()?L"Pesquisar jogos":L"Busca: "+searchQuery,box(18,340,172,43),A_SEARCH);
+ button(dc,fullscreen?L"Sair da tela cheia":L"Tela cheia / TV",box(18,395,172,43),A_FULLSCREEN);
+ if(!searchQuery.empty())button(dc,L"Limpar pesquisa",box(18,450,172,36),A_CLEAR_SEARCH);
  label(dc,L"SEM PRESSA. SÓ JOGUE.",box(27,h-200,166,22),smallFont,muted);
  button(dc,L"Configurações",box(18,h-158,172,43),A_SETTINGS);
  lineAt(dc,18,h-99,172);
@@ -217,7 +220,7 @@ void paintMain(HDC dc,RECT client) {
   hits.push_back({r,0,index});
   label(dc,g.name,box(left,rowY+cardH+12,cardW,24),mediumFont,index==selection?accent:white);
  }
- if(visibleGames.empty())label(dc,L"Nenhum jogo nesta coleção ainda.",box(x,rowY,cw,120),bodyFont,muted,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
+ if(visibleGames.empty())label(dc,L"Nenhum jogo encontrado. Limpe a pesquisa ou adicione um jogo.",box(x,rowY,cw,120),bodyFont,muted,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
  lineAt(dc,x,h-55,cw);
  label(dc,L"← →  Jogos     ↑ ↓  Ações     Enter  Confirmar     F  Favoritar     S  Configurações     Esc  Ocultar",box(x,h-47,cw,22),smallFont,muted);
  label(dc,notice.empty()?L"Seu launcher pessoal. Sem distrações.":notice,box(x,h-23,cw,18),smallFont,muted);
@@ -241,7 +244,8 @@ void drawButton(const DRAWITEMSTRUCT* item) {
  const bool disabled=(item->itemState&ODS_DISABLED)!=0;
  const bool pressed=(item->itemState&ODS_SELECTED)!=0;
  round(item->hDC,item->rcItem,disabled?surface:(primary?accent:(pressed?line:RGB(34,48,65))),CLR_INVALID,10);
- label(item->hDC,textOf(item->hwndItem),item->rcItem,mediumFont,disabled?muted:(primary?ink:white),DT_CENTER|DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS);
+ HFONT font=GetParent(item->hwndItem)==keyboardWindow?reinterpret_cast<HFONT>(SendMessageW(item->hwndItem,WM_GETFONT,0,0)):mediumFont;
+ label(item->hDC,textOf(item->hwndItem),item->rcItem,font,disabled?muted:(primary?ink:white),DT_CENTER|DT_SINGLELINE|DT_VCENTER|DT_END_ELLIPSIS);
  if(!disabled&&(item->itemState&ODS_FOCUS))focusRing(item->hDC,item->rcItem,true);
 }
 void openPage(Page requested,int gameIndex) {
@@ -279,7 +283,9 @@ void openPage(Page requested,int gameIndex) {
   nativeButton(panel,L"Compatibilidade dos jogos...",box(26,393,598,35),A_COMPAT);
   nativeButton(panel,L"Iniciar com o Windows (em segundo plano)",box(26,449,598,28),A_STARTUP);
   nativeButton(panel,L"Mostrar a biblioteca ao conectar o controle",box(26,485,598,28),A_AUTOOPEN);
-  staticText(panel,L"O monitor precisa estar ativo. Fechar a janela mantém o ícone na bandeja do Windows.",box(26,525,440,54));
+  nativeButton(panel,L"Buscar atualizações",box(26,531,278,34),A_UPDATES);
+  nativeButton(panel,L"Tela cheia / TV (F11)",box(318,531,306,34),A_FULLSCREEN);
+  control(panel,L"STATIC",L"Atualizações são verificadas somente quando você pedir. O monitor continua na bandeja ao fechar a biblioteca.",0,box(26,574,440,54),451);
   nativeButton(panel,L"Concluir",box(486,590,138,34),A_CLOSE_PANEL);
  } else if(requested==Page::Compatibility) {
   staticText(panel,L"Seu controle físico pode aparecer para os jogos como Xbox ou PlayStation. Você escolhe um padrão; exceções ficam salvas no jogo.",box(26,22,598,48));
@@ -315,6 +321,7 @@ void openPage(Page requested,int gameIndex) {
  ShowWindow(panel,SW_SHOW);SetForegroundWindow(panel);SetFocus(GetNextDlgTabItem(panel,nullptr,FALSE));
 }
 void closePanel() {
+ if(keyboardWindow)closeVirtualKeyboard(false);
  if(captureWin)closeCapture();
  if(!panel)return;
  HWND closing=panel;panel=nullptr;page=Page::None;
@@ -351,6 +358,10 @@ void action(int id) {
  case A_EXIT:if(panel)closePanel();DestroyWindow(win);break;
  case A_SETTINGS:openPage(Page::Settings);break;
  case A_COMPAT:closePanel();openPage(Page::Compatibility);break;
+ case A_SEARCH:openVirtualKeyboard();break;
+ case A_CLEAR_SEARCH:searchQuery.clear();rebuildLibrary(selection);break;
+ case A_FULLSCREEN:toggleFullscreen();break;
+ case A_UPDATES:checkForUpdates();break;
  case A_ALL:setFilter(false);break;case A_FAVORITES:setFilter(true);break;
  case A_ADD:openPage(Page::Editor);break;
  case A_EDIT:if(selection>=0)openPage(Page::Editor,selection);break;
@@ -446,19 +457,19 @@ LRESULT CALLBACK windowProc(HWND h,UINT m,WPARAM w,LPARAM l) {
   PAINTSTRUCT ps{};HDC dc=BeginPaint(h,&ps);RECT r{};GetClientRect(h,&r);
   // A transient backbuffer prevents flicker. No fullscreen bitmap survives a paint.
   HDC memory=CreateCompatibleDC(dc);HBITMAP bitmap=CreateCompatibleBitmap(dc,std::max(1L,r.right),std::max(1L,r.bottom));
-  if(memory&&bitmap){auto old=SelectObject(memory,bitmap);paintMain(memory,r);BitBlt(dc,0,0,r.right,r.bottom,memory,0,0,SRCCOPY);SelectObject(memory,old);}
-  else paintMain(dc,r);
+  if(memory&&bitmap){auto old=SelectObject(memory,bitmap);paintCanvas(memory,r);BitBlt(dc,0,0,r.right,r.bottom,memory,0,0,SRCCOPY);SelectObject(memory,old);}
+  else paintCanvas(dc,r);
   if(bitmap)DeleteObject(bitmap);
   if(memory)DeleteDC(memory);
   EndPaint(h,&ps);return 0; }
  case WM_SIZE:if(w==SIZE_MINIMIZED){clearArt();return 0;}InvalidateRect(h,nullptr,FALSE);return 0;
- case WM_GETMINMAXINFO:{auto info=reinterpret_cast<MINMAXINFO*>(l);info->ptMinTrackSize.x=1000;info->ptMinTrackSize.y=760;return 0;}
+ case WM_GETMINMAXINFO:{auto info=reinterpret_cast<MINMAXINFO*>(l);if(!fullscreen){info->ptMinTrackSize.x=1000;info->ptMinTrackSize.y=760;}return 0;}
  case WM_LBUTTONUP:case WM_LBUTTONDBLCLK: {
-  POINT p{GET_X_LPARAM(l),GET_Y_LPARAM(l)};
+  POINT p=canvasPoint(POINT{GET_X_LPARAM(l),GET_Y_LPARAM(l)});
   for(const auto& hit:hits)if(PtInRect(&hit.r,p)) {const auto copy=hit;if(copy.game>=0){selection=copy.game;keyboardFocus=-1;InvalidateRect(h,nullptr,FALSE);if(m==WM_LBUTTONDBLCLK)launch();}else action(copy.action);break;}
   return 0; }
  case WM_MOUSEMOVE: {
-  POINT p{GET_X_LPARAM(l),GET_Y_LPARAM(l)};int index=-1;
+  POINT p=canvasPoint(POINT{GET_X_LPARAM(l),GET_Y_LPARAM(l)});int index=-1;
   for(size_t i=0;i<hits.size();++i)if(PtInRect(&hits[i].r,p)){index=static_cast<int>(i);break;}
   if(index!=hovered){hovered=index;InvalidateRect(h,nullptr,FALSE);}SetCursor(LoadCursorW(nullptr,index<0?IDC_ARROW:IDC_HAND));return 0; }
  case WM_MOUSEWHEEL:moveSelection(GET_WHEEL_DELTA_WPARAM(w)>0?-1:1);return 0;
@@ -466,6 +477,7 @@ LRESULT CALLBACK windowProc(HWND h,UINT m,WPARAM w,LPARAM l) {
  case WM_INPUT:rawInput(l);return DefWindowProcW(h,m,w,l);
  case WM_INPUT_DEVICE_CHANGE:deviceChange(w,l);return 0;
  case WM_COMMAND:action(LOWORD(w));return 0;
+ case UPDATE_READY:handleUpdateResult();return 0;
  case FINISH_CAPTURE:commitCapture();return 0;
  case WM_CLOSE:hide();return 0;
  case TRAY:if(l==WM_LBUTTONUP)show();else if(l==WM_RBUTTONUP)trayMenu();return 0;
@@ -474,6 +486,8 @@ LRESULT CALLBACK windowProc(HWND h,UINT m,WPARAM w,LPARAM l) {
  return DefWindowProcW(h,m,w,l);
 }
 bool routeKey(MSG& msg) {
+ if(keyboardWindow)return keyboardRoute(msg);
+ if(msg.message==WM_KEYDOWN&&msg.wParam==VK_F11){toggleFullscreen();return true;}
  HWND target=captureWin?captureWin:panel;
  if(target&&(msg.hwnd==target||IsChild(target,msg.hwnd))) {
   if(msg.message==WM_KEYDOWN) {
@@ -493,6 +507,7 @@ bool routeKey(MSG& msg) {
  case 'F':toggleFavorite();return true;case 'S':openPage(Page::Settings);return true;
  case 'A':openPage(Page::Editor);return true;case 'E':if(selection>=0)openPage(Page::Editor,selection);return true;
  case 'P':openPage(Page::Profile);return true;
+ case VK_F3:case 'Q':openVirtualKeyboard();return true;
  }
  return false;
 }
@@ -503,6 +518,7 @@ void activateMain() {
  } else launch();
 }
 void controllerDirection(int dx,int dy) {
+ if(keyboardWindow){keyboardDirection(dx,dy);return;}
  if(captureWin)return;
  if(panel){HWND next=GetNextDlgTabItem(panel,GetFocus(),dx<0||dy<0);if(next)SetFocus(next);return;}
  int current=keyboardFocus;
@@ -527,6 +543,7 @@ void controllerDirection(int dx,int dy) {
  if(target>=0){keyboardFocus=target;if(hits[target].game>=0){selection=hits[target].game;keyboardFocus=-1;}InvalidateRect(win,nullptr,FALSE);}
 }
 void controllerButtons(HANDLE h,const std::set<USAGE>& now,const std::set<USAGE>& previous) {
+ if(keyboardWindow){if(!selfTesting&&GetForegroundWindow()!=keyboardWindow)return;for(auto b:now)if(!previous.count(b)){if(b==backButton){closeVirtualKeyboard(false);return;}if(b==okButton){keyboardConfirm();return;}}return;}
  if(captureWin) {
   if(!selfTesting&&GetForegroundWindow()!=captureWin)return;
   if(now.empty())captureArmed.insert(h);
@@ -553,7 +570,7 @@ void controllerButtons(HANDLE h,const std::set<USAGE>& now,const std::set<USAGE>
   if(page==Page::Diagnostic){std::wstring s=now.empty()?L"Nenhum botão pressionado":L"Botões detectados:";for(auto b:now)s+=L"  "+std::to_wstring(b);HWND output=GetDlgItem(panel,420);if(textOf(output)!=s)SetWindowTextW(output,s.c_str());return;}
   for(auto b:now)if(!previous.count(b)) {
    if(b==backButton){closePanel();return;}
-   if(b==okButton){HWND focused=GetFocus();wchar_t cls[32]{};GetClassNameW(focused,cls,32);if(lstrcmpiW(cls,L"BUTTON")==0)SendMessageW(focused,BM_CLICK,0,0);return;}
+   if(b==okButton){HWND focused=GetFocus();wchar_t cls[32]{};GetClassNameW(focused,cls,32);if(lstrcmpiW(cls,L"BUTTON")==0)SendMessageW(focused,BM_CLICK,0,0);else if(lstrcmpiW(cls,L"EDIT")==0&&!(GetWindowLongPtrW(focused,GWL_STYLE)&ES_READONLY))openVirtualKeyboard(focused);return;}
   }
   return;
  }

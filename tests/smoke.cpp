@@ -36,6 +36,20 @@ int runSelfTest() {
  setFilter(false);moveSelection(-1);check(selection==1,"carousel wraps backward");moveSelection(1);check(selection==0,"carousel wraps forward");
  toggleFavorite();setFilter(true);check(visibleGames.empty()&&selection==-1,"removing final favorite leaves valid empty view");setFilter(false);
  check(!validField(L"broken\nvalue")&&validField(L"--path \"a b\""),"reject line injection without rejecting quoted arguments");
+
+ games[0].favorite=true;
+ check(gameMatchesSearch(L"The Witcher 3",L"witcher")&&gameMatchesSearch(L"Ação",L"acao")&&!gameMatchesSearch(L"Portal",L"witcher"),"search ignores case and accents");
+ searchQuery=L"legacy";rebuildLibrary();check(visibleGames.size()==1,"search filters by title");
+ setFilter(true);check(visibleGames.size()==1,"search composes with favorites");searchQuery=L"no matching title";rebuildLibrary();check(visibleGames.empty()&&selection==-1,"empty search clears selection safely");
+ searchQuery.clear();setFilter(false);
+ openVirtualKeyboard();check(keyboardWindow!=nullptr,"controller keyboard opens for search");
+ SetWindowTextW(GetDlgItem(keyboardWindow,690),L"Second");closeVirtualKeyboard(false);check(searchQuery.empty(),"cancel search preserves previous query");
+ openVirtualKeyboard();SetWindowTextW(GetDlgItem(keyboardWindow,690),L"Second");closeVirtualKeyboard(true);check(searchQuery==L"Second"&&visibleGames.size()==1,"virtual keyboard applies search");
+ searchQuery.clear();setFilter(false);
+ HWND textTarget=CreateWindowExW(0,L"EDIT",L"old",WS_CHILD,0,0,200,30,win,nullptr,instance,nullptr);
+ SendMessageW(textTarget,EM_SETLIMITTEXT,40,0);openVirtualKeyboard(textTarget);SetWindowTextW(GetDlgItem(keyboardWindow,690),L"new text");closeVirtualKeyboard(true);check(textOf(textTarget)==L"new text","virtual keyboard edits native fields");DestroyWindow(textTarget);
+ ShowWindow(win,SW_SHOWNORMAL);RECT beforeFull{};GetWindowRect(win,&beforeFull);toggleFullscreen();
+ check(fullscreen&&!(GetWindowLongPtrW(win,GWL_STYLE)&WS_CAPTION),"fullscreen removes window borders");leaveFullscreen();RECT afterFull{};GetWindowRect(win,&afterFull);check(!fullscreen&&EqualRect(&beforeFull,&afterFull),"fullscreen restores window bounds");
  // A real BMP fixture exercises the Windows image decoder and GDI cache.
  BITMAPFILEHEADER header{};header.bfType=0x4d42;header.bfOffBits=sizeof(header)+sizeof(BITMAPINFOHEADER);header.bfSize=header.bfOffBits+16;
  BITMAPINFOHEADER info{};info.biSize=sizeof(info);info.biWidth=2;info.biHeight=2;info.biPlanes=1;info.biBitCount=32;info.biCompression=BI_RGB;

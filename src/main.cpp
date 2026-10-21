@@ -43,7 +43,7 @@ int WINAPI wWinMain(HINSTANCE h,HINSTANCE,LPWSTR args,int) {
  wc.lpszClassName=L"FeatherPadPanel";wc.lpfnWndProc=panelProc;RegisterClassW(&wc);
  wc.lpszClassName=L"FeatherPadCapture";wc.lpfnWndProc=captureProc;RegisterClassW(&wc);
  RECT bounds{0,0,1180,780};AdjustWindowRect(&bounds,WS_OVERLAPPEDWINDOW,FALSE);
- win=CreateWindowExW(0,L"FeatherPadWindow",L"FeatherPad 2.1 — Sua biblioteca de jogos",WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN,CW_USEDEFAULT,CW_USEDEFAULT,bounds.right-bounds.left,bounds.bottom-bounds.top,nullptr,nullptr,h,nullptr);
+ win=CreateWindowExW(0,L"FeatherPadWindow",L"FeatherPad 2.2 — Sua biblioteca de jogos",WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN,CW_USEDEFAULT,CW_USEDEFAULT,bounds.right-bounds.left,bounds.bottom-bounds.top,nullptr,nullptr,h,nullptr);
  int result=1;
  if(win) {
   darkTitle(win);rebuildLibrary();
@@ -60,6 +60,6 @@ int WINAPI wWinMain(HINSTANCE h,HINSTANCE,LPWSTR args,int) {
    result=state==-1?1:0;
   }
  }
- bridgeShutdown();clearArt();destroyTheme();if(imaging)imaging->Release();CoUninitialize();if(singleton)CloseHandle(singleton);
+ shutdownUpdates();bridgeShutdown();clearArt();destroyTheme();if(imaging)imaging->Release();CoUninitialize();if(singleton)CloseHandle(singleton);
  return result;
 }

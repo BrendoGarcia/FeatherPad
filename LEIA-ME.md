@@ -1,4 +1,95 @@
-# FeatherPad 2.1 — sua biblioteca de jogos
+# FeatherPad 2.2 — pesquisa, teclado virtual, tela cheia e atualizações
+
+## Pesquisa pelo controle
+
+Na barra lateral, selecione **Pesquisar jogos**. Também pode usar **F3** ou **Q**.
+O teclado virtual abre com o texto atual. Use direcional/analógico para escolher teclas,
+confirmar para digitar e **Aplicar** para filtrar a biblioteca. **Voltar/Cancelar** descarta
+as alterações. A busca ignora maiúsculas e acentos, combina com Favoritos e encontra
+partes do nome. **Limpar pesquisa** volta a mostrar toda a coleção atual.
+A busca é temporária e não altera o cadastro dos jogos.
+
+## Teclado virtual nos formulários
+
+Ao navegar pelo controle em um campo editável do cadastro ou perfil, pressione
+**Confirmar** para abrir o teclado virtual. Ele oferece letras, números, acentos,
+caracteres de caminho, espaço, apagar, maiúsculas, limpar e movimento do cursor.
+**Aplicar** transfere o texto ao campo; ainda é necessário salvar o jogo/perfil.
+O teclado físico e o mouse continuam disponíveis. Escolher arquivos permanece no
+seletor nativo do Windows; é possível digitar o caminho completo pelo teclado virtual.
+
+## Tela cheia para PC e TV
+
+Use **Tela cheia / TV** na barra lateral ou nas configurações; **F11** também alterna.
+A biblioteca ocupa o monitor atual sem bordas, escala texto/cartões/ações e preserva
+a proporção. Em telas maiores os elementos ficam maiores. Ao sair, restaura o estado
+anterior da janela, inclusive maximização. O modo é da sessão; não muda a resolução
+do Windows. Esc/Voltar continua ocultando a biblioteca; F11 ou o botão sai da tela cheia.
+Diálogos e teclado virtual continuam sendo janelas nativas sobre a biblioteca.
+
+## Atualizar sem baixar novamente o pacote inteiro
+
+**Uma vez:** para migrar de 2.1 ou anterior, extraia o pacote completo de 2.2 com
+`FeatherPad.exe`, `Updater.exe`, `SDL3.dll`, instruções e licenças. A versão antiga
+não possui o botão nem o componente de atualização.
+
+Depois, em **Configurações > Buscar atualizações**:
+
+1. O launcher consulta a última Release estável pública de `BrendoGarcia/FeatherPad`.
+2. Compara a versão numérica `vMAJOR.MINOR.PATCH` com a versão instalada.
+3. Pergunta se você deseja baixar. Não consulta em segundo plano automaticamente.
+4. Compara tamanho e SHA-256 dos arquivos locais com os digests dos assets do GitHub.
+5. Baixa somente os arquivos diferentes para `%LOCALAPPDATA%\FeatherPad\updates`.
+6. Valida os arquivos e pergunta se pode fechar e reiniciar. Não atualize durante um jogo.
+7. Uma cópia do **Updater instalado** aguarda o encerramento, guarda rollback dos arquivos
+   anteriores e substitui apenas os arquivos permitidos. O novo Updater baixado não é
+   executado para aplicar sua própria atualização.
+8. Reinicia o launcher. Biblioteca, capas e preferências não fazem parte da substituição.
+
+O download usa HTTPS com validação TLS do Windows e só aceita os hosts de distribuição
+GitHub previstos. A integridade usa os digests SHA-256 fornecidos pela API do GitHub.
+**Isso autentica a origem HTTPS/GitHub; não é uma assinatura digital independente do
+publicador.** A segurança depende da conta e das Releases oficiais do repositório.
+Não há token GitHub embutido: repositório privado, limite de API, falta de internet,
+release incompleta ou sem digest resultam em aviso e nenhuma atualização.
+
+A pasta precisa permitir escrita ao usuário. Não há elevação automática nem instalação
+silenciosa de drivers. Se a substituição falhar, o atualizador tenta restaurar os arquivos
+anteriores. Logs e cópias ficam na pasta da tentativa (`result.txt` e `rollback`). Uma falha
+na restauração é informada explicitamente. Essa recuperação não é garantia contra queda
+de energia; preserve a pasta de recuperação e seu backup habitual.
+
+Após sucesso, as pastas de recuperação são mantidas para inspeção. Podem ser apagadas
+manualmente com o launcher encerrado quando você confirmar que a versão funciona.
+
+### Publicar versões que o botão reconhece
+
+O novo workflow **Release Windows** compila no GitHub, executa os testes e publica um
+ZIP completo, checksums e sete assets individuais: `FeatherPad.exe`, `Updater.exe`,
+`SDL3.dll`, `LICENSE`, `LEIA-ME.md`, `SDL3.txt` e `ViGEmClient.txt`. Os dois últimos vão
+para `licenses` na instalação. Arquivos extras não são instalados automaticamente.
+
+Atualize de forma consistente a versão em `CMakeLists.txt`, `src/update_common.h`,
+`src/app.rc` e no título. Faça commit e publique uma tag estável correspondente, como
+`v2.2.0`. O workflow também aceita execução manual com uma tag já existente. Não
+sobrescreve uma release existente. A criação desta funcionalidade não publica uma release.
+
+O usuário não compila nada. O mantenedor continua produzindo os novos binários no
+GitHub Actions. O download é incremental **por arquivo**, não um patch binário de partes
+de um EXE. Um arquivo alterado é baixado inteiro. A DLL só é baixada se seu hash mudar.
+
+## Testes adicionados em 2.2
+
+A suíte verifica pesquisa com acentos/favoritos/resultado vazio, aplicação e cancelamento
+do teclado virtual, edição de campos, entrada/saída da tela cheia, comparação de versões,
+parser JSON, allowlist, SHA-256, plano de atualização e restauração com destino bloqueado.
+A suíte não publica releases nem acessa a internet. O uso em TV, controle físico e um ciclo
+real entre duas releases devem ser verificados em hardware antes da distribuição ampla.
+
+---
+
+# Guia técnico da base 2.1 (histórico e recursos preservados)
+
 
 Launcher nativo para Windows x64, escrito em C++17 e Win32. Sem navegador, Electron, Java, Python, conta ou conexão com a internet em tempo de execução.
 
