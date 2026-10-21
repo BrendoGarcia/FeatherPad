@@ -26,6 +26,7 @@ namespace {
   auto pp=reinterpret_cast<PHIDP_PREPARSED_DATA>(d->descriptor.data());USAGE buttons[128]{};ULONG count=128;
   if(HidP_GetUsages(HidP_Input,9,0,buttons,&count,pp,bytes,length)!=HIDP_STATUS_SUCCESS)return;
   std::set<USAGE> now(buttons,buttons+count),previous=d->previous;d->previous=now;
+  if(!d->uiArmed){if(now.empty())d->uiArmed=true;else return;}
   useControllerProfile(d->path);controllerButtons(handle,now,previous);
   const HWND foreground=GetForegroundWindow();
   if(captureWin||!IsWindowVisible(win)||IsIconic(win)||(foreground!=win&&foreground!=panel&&foreground!=keyboardWindow)) {d->direction=0;return;}

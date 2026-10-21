@@ -406,7 +406,7 @@ void openPage(Page requested,int gameIndex) {
   staticText(panel,L"Seu controle físico pode aparecer para os jogos como Xbox ou PlayStation. Você escolhe um padrão; exceções ficam salvas no jogo.",box(26,22,598,48));
   nativeButton(panel,L"Ativar compatibilidade de controles",box(26,82,598,38),A_COMPAT_TOGGLE);
   control(panel,L"STATIC",bridgeStatus(),0,box(26,138,598,68),430);
-  staticText(panel,L"Controle de origem (um jogador)",box(26,222,598,22));
+  staticText(panel,L"Controle de navegação (Jogador 1)",box(26,222,598,22));
   sourceCombo=control(panel,L"COMBOBOX",L"",WS_TABSTOP|CBS_DROPDOWNLIST|WS_VSCROLL,box(26,250,598,150),A_COMPAT_SOURCE);
   staticText(panel,L"Formato padrão enviado aos jogos",box(26,298,598,22));
   defaultModeCombo=control(panel,L"COMBOBOX",L"",WS_TABSTOP|CBS_DROPDOWNLIST|WS_VSCROLL,box(26,326,598,150),A_COMPAT_DEFAULT);
@@ -481,7 +481,7 @@ void action(int id) {
  case A_GENERAL:closePanel();openPage(Page::General);break;
  case A_METRICS:closePanel();openPage(Page::Metrics);break;
  case A_COMPAT:closePanel();openPage(Page::Compatibility);break;
- case A_SEARCH:openVirtualKeyboard();break;
+ case A_SEARCH:if(collectionsHome){collectionsHome=false;collectionFilter.clear();rebuildLibrary();}openVirtualKeyboard();break;
  case A_CLEAR_SEARCH:searchQuery.clear();rebuildLibrary(selection);break;
  case A_FULLSCREEN:toggleFullscreen();break;
  case A_COLLECTIONS:if(panel)closePanel();showCollections();break;

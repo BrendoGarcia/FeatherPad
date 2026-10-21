@@ -61,9 +61,9 @@ int regressions115(std::string& log){
  openPage(Page::Editor,0);openVirtualKeyboard(GetDlgItem(panel,400));launch();
  check(!panel&&!keyboardWindow&&!captureWin&&!IsWindowVisible(win)&&gameSessionActive,"115 successful game launch closes owned windows and runs in the tray");
  autoOpen=true;deviceChange(GIDC_ARRIVAL,reinterpret_cast<LPARAM>(fakeHandles[1]));
- check(!IsWindowVisible(win),"115 a controller connecting during a game cannot reopen the launcher");
+ check(!IsWindowVisible(win),"115 a controller connecting during a game cannot reopen the launcher");SendMessageW(win,RegisterWindowMessageW(L"TaskbarCreated"),0,0);check(!IsWindowVisible(win),"115 restoring the tray icon after Explorer restart does not reopen the launcher");
  check(tray.hWnd==win&&tray.uID==1&&(tray.uFlags&NIF_ICON),"115 tray icon is registered for the active launcher window");
- Sleep(1400);libraryTick();check(games[0].launches==launchCount+1,"115 successful launches still record usage");
+ Sleep(1400);libraryTick();check(games[0].launches==launchCount+1&&games[0].playedSeconds>=oldSeconds+1,"115 real executable launch records count and observed process duration");
  const auto played=games[0].playedSeconds;original.launches=games[0].launches;original.lastLaunch=games[0].lastLaunch;original.playedSeconds=played;games[0]=original;
  show();check(IsWindowVisible(win)&&!gameSessionActive,"115 explicit tray/controller open restores the library");
  games[0].path=L"C:\\FeatherPad-Missing-Game-115.exe";selection=0;const auto countBeforeFailure=games[0].launches;launch();check(IsWindowVisible(win)&&games[0].launches==countBeforeFailure,"115 a failed game launch does not hide the launcher or count usage");games[0]=original;autoOpen=false;

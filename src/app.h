@@ -51,6 +51,7 @@ struct Game {
  ControllerMode controllerMode=ControllerMode::Auto;
 };
 struct Device {
+ bool uiArmed=false;
  std::wstring path;
  std::vector<BYTE> descriptor;
  std::vector<HIDP_VALUE_CAPS> values;
