@@ -95,7 +95,7 @@ A compatibilidade de controles vem **desativada inicialmente**. Para ativá-la, 
 
 ## 🖼️ Biblioteca, capas e favoritos
 
-### Novidades de uso na versão 2.2
+### Novidades de uso na versão 1.0.1
 
 Use **Pesquisar jogos** na barra lateral (ou **F3/Q**) para abrir o teclado virtual e filtrar nomes. **Aplicar** confirma e **Cancelar/Voltar** preserva a busca anterior. **Limpar pesquisa** remove o filtro. A busca combina com Favoritos.
 
@@ -255,7 +255,7 @@ O FeatherPad não configura o HidHide automaticamente. No primeiro teste, feche 
 
 > **Dependência externa:** ViGEmBus e ViGEmClient são projetos aposentados. A integração é opcional e utiliza a versão oficial 1.22.0 do driver, que removeu o atualizador legado. Consulte o [aviso de fim de vida](https://docs.nefarius.at/projects/ViGEm/End-of-Life/) e evite antigos atualizadores.
 
-## 🛠️ Correções da versão 2.2.1
+## 🛠️ Correções da versão 1.0.1
 
 As capas mantêm o recorte correto em tela cheia, inclusive com escala e margens laterais. O teclado foi redesenhado com fileiras QWERTY deslocadas, teclas arredondadas maiores, Shift, apagar e barra de espaço ampla, além das páginas de números, acentos e símbolos.
 
@@ -267,7 +267,7 @@ Em **Configurações > Buscar atualizações**, o FeatherPad consulta a última 
 
 Depois de validar os digests SHA-256 fornecidos pelo GitHub, o launcher solicita confirmação para reiniciar. Uma cópia do `Updater.exe` instalado aguarda o encerramento, preserva os arquivos anteriores para recuperação, aplica os arquivos permitidos e reabre o programa. A biblioteca do usuário não é substituída. Evite atualizar durante uma partida, pois o monitor será encerrado.
 
-**Para migrar de uma versão anterior a 2.2, baixe o pacote completo uma vez**, incluindo `Updater.exe`. Depois disso, as versões futuras podem ser instaladas pelo botão, usando os assets individuais do workflow **Release Windows** ou um ZIP completo `FeatherPad-Windows-x64.zip`. A versão 2.1 não consegue atualizar a si mesma por esse mecanismo. Para corrigir a detecção da 2.2.0, extraia o pacote completo da 2.2.1 uma vez.
+**Para migrar de uma versão anterior a 1.0.1, baixe o pacote completo uma vez**, incluindo `Updater.exe`. Depois disso, as versões futuras podem ser instaladas pelo botão, usando os assets individuais do workflow **Release Windows** ou um ZIP completo `FeatherPad-Windows-x64.zip`. A versão 1.0.1 não consegue atualizar a si mesma por esse mecanismo. Para corrigir a detecção da 1.0.1, extraia o pacote completo da 1.0.1 uma vez.
 
 As consultas são manuais. HTTPS valida a origem e SHA-256 verifica a integridade; **não há assinatura digital independente do publicador**. O mecanismo confia na conta/release oficial do GitHub. Release privada/incompleta, digest ausente, falha de rede ou permissões insuficientes geram aviso. Não há token embutido nem elevação automática.
 
@@ -411,7 +411,7 @@ Os testes da CI não instalam o driver virtual. Portanto, não substituem testes
 
 | Sintoma | O que conferir |
 |---|---|
-| Existe Release, mas a 2.2.0 informa que já está atualizada | Instale a correção 2.2.1. A lógica antiga comparava a tag pública com uma versão interna diferente e não aceitava ZIP isolado. |
+| Existe Release, mas a 1.0.1 informa que já está atualizada | Instale a correção 1.0.1. A lógica antiga comparava a tag pública com uma versão interna diferente e não aceitava ZIP isolado. |
 | Falta `SDL3.dll` ao ativar compatibilidade | Extraia todos os arquivos do pacote, mantendo a DLL ao lado do EXE. |
 | O controle liga, mas o launcher não aparece | Confira se o monitor está na bandeja e se o botão de abertura está correto. Ative a inicialização com Windows se desejar. |
 | O controle navega no launcher, mas não no jogo | Ative compatibilidade, confira o driver/status e escolha um formato aceito pelo jogo. Reinicie o jogo após alterar o formato. |
