@@ -137,6 +137,7 @@ int runSelfTest() {
  commitCapture();check(!captureWin&&openButton==6,"save captured button and close only capture popup");
  beginCapture(A_CAPTURE_OPEN);controllerButtons(fake,{},{});controllerButtons(fake,{7},{});closeCapture();
  check(openButton==6,"cancel capture preserves saved binding");closePanel();loadDatabase();check(openButton==6,"saved binding survives reload");
+ HANDLE fakeDevice=reinterpret_cast<HANDLE>(static_cast<INT_PTR>(456));Device profileDevice;profileDevice.path=L"test-hid-profile";devices[fakeDevice]=profileDevice;openPage(Page::Settings);SendMessageW(GetDlgItem(panel,A_PLAYER_PROFILE),CB_SETCURSEL,0,0);action(A_PLAYER_PROFILE);check(currentControllerProfile()==L"test-hid-profile","settings select a physical controller profile for shortcut and calibration edits");closePanel();devices.erase(fakeDevice);useControllerProfile(L"");
  openPage(Page::Profile);check(panel&&page==Page::Profile,"profile editor opens independently");closePanel();
  openPage(Page::Editor,0);check(GetDlgItem(panel,400)!=nullptr&&GetDlgItem(panel,A_SAVE_GAME)!=nullptr,"game editor fields and save control exist");
  SetWindowTextW(GetDlgItem(panel,400),L"Edited through native UI");action(A_SAVE_GAME);

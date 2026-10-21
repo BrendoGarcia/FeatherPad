@@ -429,7 +429,7 @@ void action(int id) {
  case A_CAPTURE_OPEN:case A_CAPTURE_OK:case A_CAPTURE_BACK:case A_CAPTURE_STAR:beginCapture(id);break;
  case A_CAPTURE_SAVE:commitCapture();break;case A_CAPTURE_CANCEL:closeCapture();break;
  case A_DIAG:closePanel();openPage(Page::Diagnostic);break;
- case A_CALIBRATE:{const int old=profileDeadzone();const int next=old<4000?8000:old<8000?12000:old<12000?16000:0;setProfileDeadzone(next);if(!saveDatabase(panel)){setProfileDeadzone(old);}else {SetWindowTextW(GetDlgItem(panel,A_CALIBRATE),(L"Zona morta: "+std::to_wstring(next)).c_str());status(L"Zona morta salva para este controle físico.");}break;}
+ case A_CALIBRATE:{const auto selected=SendMessageW(profileCombo,CB_GETCURSEL,0,0);if(selected<0||selected>=static_cast<LRESULT>(profileKeys.size()))break;useControllerProfile(profileKeys[static_cast<size_t>(selected)]);const int old=profileDeadzone();const int next=old<4000?8000:old<8000?12000:old<12000?16000:0;setProfileDeadzone(next);if(!saveDatabase(panel)){setProfileDeadzone(old);}else {SetWindowTextW(GetDlgItem(panel,A_CALIBRATE),(L"Zona morta: "+std::to_wstring(next)).c_str());status(L"Zona morta salva para este controle físico.");}break;}
  case A_PLAYER_PROFILE:{const auto selected=SendMessageW(profileCombo,CB_GETCURSEL,0,0);if(selected<0||selected>=static_cast<LRESULT>(profileKeys.size()))break;useControllerProfile(profileKeys[static_cast<size_t>(selected)]);for(int i=0;i<4;++i)SetWindowTextW(GetDlgItem(panel,A_CAPTURE_OPEN+i),(L"Botão "+std::to_wstring(*profileBinding(A_CAPTURE_OPEN+i))+L"  ·  Alterar").c_str());SetWindowTextW(GetDlgItem(panel,A_CALIBRATE),(L"Zona morta: "+std::to_wstring(profileDeadzone())).c_str());break;}
  case A_COMPAT_TOGGLE: {
   controllerCompatibility=!controllerCompatibility;

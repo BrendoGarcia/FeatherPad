@@ -44,10 +44,10 @@ void libraryTick(){
  static ULONGLONG lastMetrics=0;
  if(now-lastMetrics>=2000&&IsWindowVisible(win)&&!IsIconic(win)){
   PROCESS_MEMORY_COUNTERS_EX mem{};mem.cb=sizeof(mem);std::wstring ram=L"RAM: indisponível";
-  if(GetProcessMemoryInfo(GetCurrentProcess(),reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&mem),sizeof(mem)))ram=L"RAM privada: "+std::to_wstring(mem.PrivateUsage/1048576)+L" MB | residente: "+std::to_wstring(mem.WorkingSetSize/1048576)+L" MB";
-  std::wstring net=L"Internet: desconhecida";INetworkListManager* manager=nullptr;
-  if(SUCCEEDED(CoCreateInstance(CLSID_NetworkListManager,nullptr,CLSCTX_ALL,IID_INetworkListManager,reinterpret_cast<void**>(&manager)))){NLM_CONNECTIVITY state{};if(SUCCEEDED(manager->GetConnectivity(&state)))net=(state&(NLM_CONNECTIVITY_IPV4_INTERNET|NLM_CONNECTIVITY_IPV6_INTERNET))?L"Internet: conectada":state?L"Internet: só rede local":L"Internet: desconectada";manager->Release();}
-  metrics=ram+L"   ·   "+bridgeBatteryStatus()+L"   ·   "+bridgePlayerSummary()+L"   ·   "+net;lastMetrics=now;InvalidateRect(win,nullptr,FALSE);
+  if(GetProcessMemoryInfo(GetCurrentProcess(),reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&mem),sizeof(mem)))ram=L"RAM priv. "+std::to_wstring(mem.PrivateUsage/1048576)+L" MB / ativa "+std::to_wstring(mem.WorkingSetSize/1048576)+L" MB";
+  std::wstring net=L"Rede desconhecida";INetworkListManager* manager=nullptr;
+  if(SUCCEEDED(CoCreateInstance(CLSID_NetworkListManager,nullptr,CLSCTX_ALL,IID_INetworkListManager,reinterpret_cast<void**>(&manager)))){NLM_CONNECTIVITY state{};if(SUCCEEDED(manager->GetConnectivity(&state)))net=(state&(NLM_CONNECTIVITY_IPV4_INTERNET|NLM_CONNECTIVITY_IPV6_INTERNET))?L"Rede: internet":state?L"Rede: local":L"Rede: offline";manager->Release();}
+  metrics=ram+L" · "+bridgeBatteryStatus()+L" · Controles: "+std::to_wstring(bridgePlayerCount())+L"/4 · "+net;lastMetrics=now;InvalidateRect(win,nullptr,FALSE);
  }
 }
 void finishSessions(){libraryTick();for(auto& s:sessions)CloseHandle(s.process);if(!sessions.empty())saveDatabase();sessions.clear();}
