@@ -35,7 +35,7 @@ bool newerVersion(const std::string& a,const std::string& b){std::array<unsigned
 std::wstring wide(const std::string& s){int n=MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,s.data(),static_cast<int>(s.size()),nullptr,0);if(!n&&!s.empty())throw std::runtime_error("UTF-8 inválido.");std::wstring out(n,L'\0');if(n)MultiByteToWideChar(CP_UTF8,MB_ERR_INVALID_CHARS,s.data(),static_cast<int>(s.size()),&out[0],n);return out;}
 std::string utf8(const std::wstring& s){int n=WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,s.data(),static_cast<int>(s.size()),nullptr,0,nullptr,nullptr);if(!n&&!s.empty())throw std::runtime_error("Unicode inválido.");std::string out(n,'\0');if(n)WideCharToMultiByte(CP_UTF8,WC_ERR_INVALID_CHARS,s.data(),static_cast<int>(s.size()),&out[0],n,nullptr,nullptr);return out;}
 std::wstring executableDirectory(){wchar_t p[32768]{};GetModuleFileNameW(nullptr,p,32768);std::wstring s=p;return s.substr(0,s.find_last_of(L"\\/"));}
-std::wstring allowedPath(const std::wstring& name){if(name==L"FeatherPad.exe"||name==L"Updater.exe"||name==L"SDL3.dll"||name==L"LICENSE"||name==L"LEIA-ME.md")return name;if(name==L"SDL3.txt"||name==L"ViGEmClient.txt")return L"licenses\\"+name;return L"";}
+std::wstring allowedPath(const std::wstring& name){if(name==L"FeatherPad.exe"||name==L"Updater.exe"||name==L"SDL3.dll"||name==L"LICENSE"||name==L"LEIA-ME.md")return name;if(name==L"SDL3.txt"||name==L"ViGEmClient.txt"||name==L"zlib.txt")return L"licenses\\"+name;return L"";}
 std::vector<File> releaseFiles(const Json& release){
  if(release.at("draft").value!="false"||release.at("prerelease").value!="false")throw std::runtime_error("A release não é estável.");
  const auto& assets=release.at("assets");if(assets.kind!='[')throw std::runtime_error("Lista de arquivos inválida.");
@@ -45,11 +45,32 @@ std::vector<File> releaseFiles(const Json& release){
   seen[f.name]=true;
   f.url=a.at("browser_download_url").string();const std::string prefix="https://github.com/BrendoGarcia/FeatherPad/releases/download/";
   if(f.url.rfind(prefix,0)!=0)throw std::runtime_error("Origem de download inválida.");
+  
   auto digest=a.at("digest").string();if(digest.rfind("sha256:",0)!=0||!digestValid(digest.substr(7)))throw std::runtime_error("Release sem SHA-256 confiável do GitHub.");f.hash=digest.substr(7);f.size=a.at("size").number();if(!f.size||f.size>128*1024*1024)throw std::runtime_error("Tamanho de arquivo fora do limite.");files.push_back(f);
  }
- if(files.size()!=7)throw std::runtime_error("Release sem os 7 arquivos de atualização. Use o workflow Release Windows.");
+ if(std::count_if(files.begin(),files.end(),[](const File& f){return f.name!=L"zlib.txt";})!=7)throw std::runtime_error("Release sem os 7 arquivos de atualização. Use o workflow Release Windows.");
  return files;
 }
+
+Distribution releaseDistribution(const Json& release){
+ if(release.at("draft").value!="false"||release.at("prerelease").value!="false")throw std::runtime_error("A release não é estável.");
+ Distribution result;size_t raw=0;for(const auto& a:release.at("assets").array)if(!allowedPath(wide(a.at("name").string())).empty())++raw;
+ if(raw>=7){result.files=releaseFiles(release);return result;}
+ for(const auto& a:release.at("assets").array){auto name=a.at("name").string();if(name.rfind("FeatherPad-Windows-x64",0)!=0||name.size()<4||name.substr(name.size()-4)!=".zip")continue;
+  if(result.archive)throw std::runtime_error("Há mais de um ZIP Windows compatível na release.");
+  result.archive=true;result.zip.name=L"package.zip";result.zip.url=a.at("browser_download_url").string();
+  if(result.zip.url.rfind("https://github.com/BrendoGarcia/FeatherPad/releases/download/",0)!=0)throw std::runtime_error("Origem ZIP inválida.");
+  auto digest=a.at("digest").string();if(digest.rfind("sha256:",0)!=0||!digestValid(digest.substr(7)))throw std::runtime_error("ZIP sem SHA-256 fornecido pelo GitHub.");result.zip.hash=digest.substr(7);result.zip.size=a.at("size").number();if(!result.zip.size||result.zip.size>64*1024*1024)throw std::runtime_error("ZIP maior que o limite de 64 MB.");
+ }
+ if(!result.archive)throw std::runtime_error("Release sem arquivos de atualização ou ZIP FeatherPad-Windows-x64 compatível.");
+ return result;
+}
+std::vector<File> changedFiles(const std::vector<File>& files,const std::wstring& install){std::vector<File> changed;for(const auto& f:files)if(!verifyFile(install+L"\\"+f.path,f))changed.push_back(f);return changed;}
+namespace {
+ std::pair<DWORD,DWORD> executableVersion(const std::wstring& path){DWORD ignored=0;DWORD n=GetFileVersionInfoSizeW(path.c_str(),&ignored);if(!n||n>1024*1024)throw std::runtime_error("Executável sem versão válida: "+utf8(path));std::vector<BYTE> data(n);if(!GetFileVersionInfoW(path.c_str(),0,n,data.data()))throw std::runtime_error("Não foi possível ler a versão do executável.");VS_FIXEDFILEINFO* info=nullptr;UINT size=0;if(!VerQueryValueW(data.data(),L"\\",reinterpret_cast<void**>(&info),&size)||size<sizeof(VS_FIXEDFILEINFO)||info->dwSignature!=0xfeef04bd)throw std::runtime_error("Versão do executável inválida.");return {info->dwFileVersionMS,info->dwFileVersionLS};}
+}
+bool isOlderExecutable(const std::wstring& candidate,const std::wstring& installed){return executableVersion(candidate)<executableVersion(installed);}
+
 std::string hashFile(const std::wstring& path){
  if(!ordinary(path))return "";
  std::ifstream input(std::filesystem::path(path),std::ios::binary);if(!input)return "";
@@ -61,11 +82,12 @@ std::string hashFile(const std::wstring& path){
  ok=ok&&input.eof()&&BCryptFinishHash(h,digest,sizeof(digest),0)>=0;
  if(ok){const char* digits="0123456789abcdef";for(auto c:digest){result+=digits[c>>4];result+=digits[c&15];}}
  if(h)BCryptDestroyHash(h);
- BCryptCloseAlgorithmProvider(alg,0);return result;
+ BCryptCloseAlgorithmProvider(alg,0);
+ return result;
 }
 bool verifyFile(const std::wstring& p,const File& f){WIN32_FILE_ATTRIBUTE_DATA a{};return GetFileAttributesExW(p.c_str(),GetFileExInfoStandard,&a)&&!a.nFileSizeHigh&&a.nFileSizeLow==f.size&&hashFile(p)==f.hash;}
 void writePlan(const std::wstring& stage,const std::vector<File>& files){std::ofstream out(std::filesystem::path(stage+L"\\plan.txt"),std::ios::binary);if(!out)throw std::runtime_error("Não foi possível salvar o plano.");for(const auto& f:files)out<<utf8(f.name)<<' '<<f.hash<<' '<<f.size<<'\n';out.flush();if(!out)throw std::runtime_error("Falha ao salvar o plano.");}
-std::vector<File> readPlan(const std::wstring& stage){std::ifstream in(std::filesystem::path(stage+L"\\plan.txt"));std::vector<File> files;std::string line;std::set<std::wstring> names;while(std::getline(in,line)){if(line.size()>200)throw std::runtime_error("Plano inválido.");std::istringstream row(line);File f;std::string name,extra;if(!(row>>name>>f.hash>>f.size)||(row>>extra))throw std::runtime_error("Plano inválido.");f.name=wide(name);f.path=allowedPath(f.name);if(f.path.empty()||!names.insert(f.name).second||!digestValid(f.hash)||!f.size||f.size>128*1024*1024||files.size()>=7)throw std::runtime_error("Plano inválido.");files.push_back(f);}if(files.empty())throw std::runtime_error("Plano vazio.");
+std::vector<File> readPlan(const std::wstring& stage){std::ifstream in(std::filesystem::path(stage+L"\\plan.txt"));std::vector<File> files;std::string line;std::set<std::wstring> names;while(std::getline(in,line)){if(line.size()>200)throw std::runtime_error("Plano inválido.");std::istringstream row(line);File f;std::string name,extra;if(!(row>>name>>f.hash>>f.size)||(row>>extra))throw std::runtime_error("Plano inválido.");f.name=wide(name);f.path=allowedPath(f.name);if(f.path.empty()||!names.insert(f.name).second||!digestValid(f.hash)||!f.size||f.size>128*1024*1024||files.size()>=8)throw std::runtime_error("Plano inválido.");files.push_back(f);}if(files.empty())throw std::runtime_error("Plano vazio.");
  return files;}
 bool applyFiles(const std::wstring& stage,const std::wstring& install,const std::vector<File>& files){
  if(!safeParent(stage)||!safeParent(install))return false;

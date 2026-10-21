@@ -53,7 +53,10 @@ namespace {
  }
  void cover(HDC dc,const Game& g,RECT r,int index) {
   const auto* art=artFor(g.cover);
-  if(art) {int saved=SaveDC(dc);HRGN clip=CreateRoundRectRgn(r.left,r.top,r.right+1,r.bottom+1,10,10);SelectClipRgn(dc,clip);drawArt(dc,*art,r);RestoreDC(dc,saved);DeleteObject(clip);}
+  if(art) {int saved=SaveDC(dc);
+   // GDI regions use device coordinates; a path transforms with the canvas.
+   BeginPath(dc);RoundRect(dc,r.left,r.top,r.right+1,r.bottom+1,10,10);EndPath(dc);SelectClipPath(dc,RGN_AND);
+   drawArt(dc,*art,r);RestoreDC(dc,saved);}
   else {
    const COLORREF colors[]={RGB(36,73,91),RGB(69,51,95),RGB(78,67,42),RGB(36,77,66),RGB(71,45,63)};
    round(dc,r,colors[static_cast<size_t>(std::max(index,0))%5]);

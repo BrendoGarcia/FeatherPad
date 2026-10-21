@@ -6,6 +6,10 @@ namespace {
   if(f==INVALID_HANDLE_VALUE)return false;
   DWORD n=0;bool ok=WriteFile(f,data,size,&n,nullptr)&&n==size;CloseHandle(f);return ok;
  }
+ void snapshot(HWND window,const wchar_t* path){
+  RECT r{};GetClientRect(window,&r);BITMAPINFO info{};info.bmiHeader.biSize=sizeof(BITMAPINFOHEADER);info.bmiHeader.biWidth=r.right;info.bmiHeader.biHeight=-r.bottom;info.bmiHeader.biPlanes=1;info.bmiHeader.biBitCount=32;info.bmiHeader.biCompression=BI_RGB;
+  HDC dc=GetDC(window),memory=CreateCompatibleDC(dc);void* pixels=nullptr;HBITMAP bitmap=CreateDIBSection(dc,&info,DIB_RGB_COLORS,&pixels,nullptr,0);if(bitmap){auto old=SelectObject(memory,bitmap);RedrawWindow(window,nullptr,nullptr,RDW_INVALIDATE|RDW_UPDATENOW|RDW_ALLCHILDREN);GdiFlush();BitBlt(memory,0,0,r.right,r.bottom,dc,0,0,SRCCOPY);GdiFlush();BITMAPFILEHEADER header{};header.bfType=0x4d42;header.bfOffBits=sizeof(header)+sizeof(BITMAPINFOHEADER);header.bfSize=header.bfOffBits+r.right*r.bottom*4;std::vector<BYTE> output(header.bfSize);CopyMemory(output.data(),&header,sizeof(header));CopyMemory(output.data()+sizeof(header),&info.bmiHeader,sizeof(BITMAPINFOHEADER));CopyMemory(output.data()+header.bfOffBits,pixels,r.right*r.bottom*4);writeBytes(path,output.data(),static_cast<DWORD>(output.size()));SelectObject(memory,old);DeleteObject(bitmap);}DeleteDC(memory);ReleaseDC(window,dc);
+ }
  void cleanup(const std::wstring& folder) {
   WIN32_FIND_DATAW f{};HANDLE search=FindFirstFileW((folder+L"\\*").c_str(),&f);
   if(search!=INVALID_HANDLE_VALUE){do{if(lstrcmpW(f.cFileName,L".")==0||lstrcmpW(f.cFileName,L"..")==0)continue;auto path=folder+L"\\"+f.cFileName;if(f.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY)cleanup(path);else DeleteFileW(path.c_str());}while(FindNextFileW(search,&f));FindClose(search);}
@@ -46,10 +50,21 @@ int runSelfTest() {
  SetWindowTextW(GetDlgItem(keyboardWindow,690),L"Second");closeVirtualKeyboard(false);check(searchQuery.empty(),"cancel search preserves previous query");
  openVirtualKeyboard();SetWindowTextW(GetDlgItem(keyboardWindow,690),L"Second");closeVirtualKeyboard(true);check(searchQuery==L"Second"&&visibleGames.size()==1,"virtual keyboard applies search");
  searchQuery.clear();setFilter(false);
- openVirtualKeyboard();SetFocus(GetDlgItem(keyboardWindow,700));keyboardConfirm();keyboardDirection(1,0);keyboardConfirm();
+ openVirtualKeyboard();
+ RECT qRect{},aRect{},spaceRect{},letterRect{};
+ GetWindowRect(GetDlgItem(keyboardWindow,700),&qRect);GetWindowRect(GetDlgItem(keyboardWindow,710),&aRect);
+ GetWindowRect(GetDlgItem(keyboardWindow,761),&spaceRect);GetWindowRect(GetDlgItem(keyboardWindow,701),&letterRect);
+ check(keyboardGlyphsVisible(),"virtual keys draw readable glyphs and dark rounded corners");
+ snapshot(keyboardWindow,L"keyboard-preview.bmp");
+ check(aRect.left>qRect.left&&spaceRect.right-spaceRect.left>4*(letterRect.right-letterRect.left),"keyboard uses staggered QWERTY rows and wide space bar");
+ std::wstring availableSymbols;
+ for(int mode=0;mode<4;++mode){for(int code=0;code<=28;++code)if(HWND key=GetDlgItem(keyboardWindow,700+code))availableSymbols+=textOf(key);SetFocus(GetDlgItem(keyboardWindow,768));keyboardConfirm();}
+ bool completeSymbols=true;for(wchar_t symbol:std::wstring(L"\"'/:;[]{}\\"))if(availableSymbols.find(symbol)==std::wstring::npos)completeSymbols=false;
+ check(completeSymbols,"keyboard pages include quotes, paths and argument punctuation");
+ SetFocus(GetDlgItem(keyboardWindow,700));keyboardConfirm();keyboardDirection(1,0);keyboardConfirm();
  check(textOf(GetDlgItem(keyboardWindow,690))==L"qw","controller navigation types on virtual keys");
  SetFocus(GetDlgItem(keyboardWindow,768));keyboardConfirm();SetFocus(GetDlgItem(keyboardWindow,700));keyboardConfirm();
- check(textOf(GetDlgItem(keyboardWindow,690))==L"qw!","symbol page supports paths and special characters");closeVirtualKeyboard(false);
+ check(textOf(GetDlgItem(keyboardWindow,690))==L"qw1","symbol page supports paths and special characters");closeVirtualKeyboard(false);
  HWND textTarget=CreateWindowExW(0,L"EDIT",L"old",WS_CHILD,0,0,200,30,win,nullptr,instance,nullptr);
  SendMessageW(textTarget,EM_SETLIMITTEXT,40,0);openVirtualKeyboard(textTarget);SetWindowTextW(GetDlgItem(keyboardWindow,690),L"new text");closeVirtualKeyboard(true);check(textOf(textTarget)==L"new text","virtual keyboard edits native fields");DestroyWindow(textTarget);
  ShowWindow(win,SW_SHOWNORMAL);RECT beforeFull{};GetWindowRect(win,&beforeFull);toggleFullscreen();
@@ -70,6 +85,18 @@ int runSelfTest() {
  games[0].cover=imported;games[0].favorite=true;games[0].name=L"Minha aventura";rebuildLibrary(0);
  HDC screen=GetDC(win),memory=CreateCompatibleDC(screen);HBITMAP bitmap=CreateCompatibleBitmap(screen,1180,780);auto old=SelectObject(memory,bitmap);
  paintMain(memory,RECT{0,0,1180,780});check(!hits.empty(),"paint native library with cover, profile and favorite");
+
+ // Regression: rounded image clipping must transform with the fullscreen canvas.
+ games[1].cover=imported;
+ for(const SIZE size:{SIZE{1366,768},SIZE{1920,1080},SIZE{2560,1440}}){
+  HDC canvas=CreateCompatibleDC(screen);HBITMAP surface=CreateCompatibleBitmap(screen,size.cx,size.cy);auto previous=SelectObject(canvas,surface);
+  fullscreen=true;paintCanvas(canvas,RECT{0,0,size.cx,size.cy});fullscreen=false;
+  const double scale=std::min(size.cx/1100.0,size.cy/760.0),ox=(size.cx-1100*scale)/2,oy=(size.cy-760*scale)/2;
+  int covered=0;for(const auto& hit:hits)if(hit.game>=0){for(int fraction:{1,2,3}){int x=hit.r.left+(hit.r.right-hit.r.left)*fraction/4,y=(hit.r.top+hit.r.bottom)/2;if(GetPixel(canvas,static_cast<int>(ox+x*scale),static_cast<int>(oy+y*scale))==RGB(50,200,90))++covered;}}
+  check(covered>=6,"fullscreen cover pixels span each card, not clipped to vertical strips");
+  SelectObject(canvas,previous);DeleteObject(surface);DeleteDC(canvas);
+ }
+ paintMain(memory,RECT{0,0,1180,780});
  keyboardFocus=-1;controllerDirection(0,-1);check(keyboardFocus>=0,"controller can leave carousel and reach interface actions");
  selection=0;keyboardFocus=-1;controllerDirection(1,0);check(selection==1,"horizontal controller movement advances library carousel");
  selection=0;keyboardFocus=-1;
