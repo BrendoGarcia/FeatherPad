@@ -14,3 +14,5 @@ void toggleFullscreen();
 void leaveFullscreen();
 POINT canvasPoint(POINT p);
 void paintCanvas(HDC dc,RECT physical);
+
+bool keyboardGlyphsVisible();

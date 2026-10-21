@@ -54,6 +54,7 @@ int runSelfTest() {
  RECT qRect{},aRect{},spaceRect{},letterRect{};
  GetWindowRect(GetDlgItem(keyboardWindow,700),&qRect);GetWindowRect(GetDlgItem(keyboardWindow,710),&aRect);
  GetWindowRect(GetDlgItem(keyboardWindow,761),&spaceRect);GetWindowRect(GetDlgItem(keyboardWindow,701),&letterRect);
+ check(keyboardGlyphsVisible(),"virtual keys draw readable glyphs and dark rounded corners");
  snapshot(keyboardWindow,L"keyboard-preview.bmp");
  check(aRect.left>qRect.left&&spaceRect.right-spaceRect.left>4*(letterRect.right-letterRect.left),"keyboard uses staggered QWERTY rows and wide space bar");
  std::wstring availableSymbols;

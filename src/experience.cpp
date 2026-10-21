@@ -40,6 +40,7 @@ namespace {
   SelectObject(dc,textFont);SetTextColor(dc,RGB(155,167,182));RECT help{28,r.bottom-32,r.right-28,r.bottom-8};DrawTextW(dc,L"Direcional: mover   ·   Confirmar: digitar   ·   Voltar: cancelar   ·   ↵: aplicar",-1,&help,DT_CENTER|DT_SINGLELINE|DT_VCENTER);SelectObject(dc,old);
  }
  void drawKey(const DRAWITEMSTRUCT* item){
+  const int saved=SaveDC(item->hDC);const auto caption=textOf(item->hwndItem);
   HBRUSH backgroundBrush=CreateSolidBrush(RGB(12,15,20));FillRect(item->hDC,&item->rcItem,backgroundBrush);DeleteObject(backgroundBrush);
   const int code=item->CtlID-700;bool focused=(item->itemState&ODS_FOCUS)!=0,disabled=(item->itemState&ODS_DISABLED)!=0;
   bool primary=code==64,active=code==62&&upper,hovered=hoverKey==code;
@@ -52,9 +53,10 @@ namespace {
    const int cx=(r.left+r.right)/2,cy=(r.top+r.bottom)/2;HPEN icon=CreatePen(PS_SOLID,2,focused?RGB(8,36,32):RGB(245,247,250));auto previousPen=SelectObject(item->hDC,icon),previousBrush=SelectObject(item->hDC,GetStockObject(HOLLOW_BRUSH));
    if(code==60){POINT outline[]={{cx-25,cy},{cx-11,cy-16},{cx+25,cy-16},{cx+25,cy+16},{cx-11,cy+16},{cx-25,cy}};Polyline(item->hDC,outline,6);MoveToEx(item->hDC,cx-1,cy-7,nullptr);LineTo(item->hDC,cx+13,cy+7);MoveToEx(item->hDC,cx+13,cy-7,nullptr);LineTo(item->hDC,cx-1,cy+7);}
    else {POINT outline[]={{cx,cy-20},{cx+17,cy},{cx+7,cy},{cx+7,cy+18},{cx-7,cy+18},{cx-7,cy},{cx-17,cy},{cx,cy-20}};Polyline(item->hDC,outline,8);}
-   SelectObject(item->hDC,previousBrush);SelectObject(item->hDC,previousPen);DeleteObject(icon);SelectObject(item->hDC,old);return;
+   SelectObject(item->hDC,previousBrush);SelectObject(item->hDC,previousPen);DeleteObject(icon);SelectObject(item->hDC,old);RestoreDC(item->hDC,saved);return;
   }
-  auto text=textOf(item->hwndItem);DrawTextW(item->hDC,text.c_str(),static_cast<int>(text.size()),&r,DT_CENTER|DT_VCENTER|DT_SINGLELINE);SelectObject(item->hDC,old);
+  SetTextAlign(item->hDC,TA_LEFT|TA_TOP|TA_NOUPDATECP);SIZE extent{};GetTextExtentPoint32W(item->hDC,caption.c_str(),static_cast<int>(caption.size()),&extent);
+  TextOutW(item->hDC,(r.left+r.right-extent.cx)/2,(r.top+r.bottom-extent.cy)/2,caption.c_str(),static_cast<int>(caption.size()));SelectObject(item->hDC,old);RestoreDC(item->hDC,saved);
  }
  LRESULT CALLBACK keyProc(HWND h,UINT m,WPARAM w,LPARAM l){
   auto old=reinterpret_cast<WNDPROC>(GetPropW(h,L"KeyOriginal"));
@@ -98,6 +100,13 @@ void openVirtualKeyboard(HWND target){
  rowKey(62,L"⇧",0,1.25,2);for(int i=0;i<7;++i)rowKey(20+i,std::wstring(1,character(20+i)),1.25+i,1,2);rowKey(60,L"⌫",8.25,1.75,2);
  rowKey(68,L"123",0,1.4,3);rowKey(27,L",",1.4,1,3);rowKey(61,L"espaço",2.4,5.2,3);rowKey(28,L".",7.6,1,3);rowKey(64,L"↵ Aplicar",8.6,1.4,3);
  EnableWindow(keyboardOwner,FALSE);ShowWindow(keyboardWindow,SW_SHOW);SetForegroundWindow(keyboardWindow);chooseKey(0);
+}
+bool keyboardGlyphsVisible(){
+ if(!keyboardWindow)return false;
+ HDC screen=GetDC(keyboardWindow),dc=CreateCompatibleDC(screen);HBITMAP bitmap=CreateCompatibleBitmap(screen,120,100);auto old=SelectObject(dc,bitmap);
+ DRAWITEMSTRUCT item{};item.CtlID=701;item.hwndItem=GetDlgItem(keyboardWindow,701);item.hDC=dc;item.rcItem=RECT{0,0,120,100};drawKey(&item);int light=0;
+ for(int y=20;y<80;++y)for(int x=15;x<105;++x){auto c=GetPixel(dc,x,y);if(GetRValue(c)>160&&GetGValue(c)>160&&GetBValue(c)>160)++light;}
+ bool corners=GetPixel(dc,0,0)==RGB(12,15,20);SelectObject(dc,old);DeleteObject(bitmap);DeleteDC(dc);ReleaseDC(keyboardWindow,screen);return light>20&&corners;
 }
 void closeVirtualKeyboard(bool apply){
  if(!keyboardWindow)return;
