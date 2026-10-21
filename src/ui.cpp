@@ -200,8 +200,8 @@ void paintMain(HDC dc,RECT client) {
  label(dc,L"F",box(26,28,34,34),titleFont,ink,DT_CENTER|DT_SINGLELINE|DT_VCENTER);
  label(dc,L"FeatherPad",box(72,26,126,38),mediumFont);
  label(dc,L"SEU ESPAÇO DE JOGOS",box(27,78,166,22),smallFont,muted);
- button(dc,L"Biblioteca",box(18,129,172,45),A_ALL,!favoritesOnly);
- button(dc,L"★   Favoritos",box(18,184,172,45),A_FAVORITES,favoritesOnly);
+ button(dc,L"Biblioteca",box(18,129,172,45),A_ALL,!collectionsHome&&collectionFilter.empty()&&!favoritesOnly);
+ button(dc,L"★   Favoritos",box(18,184,172,45),A_FAVORITES,!collectionsHome&&favoritesOnly);
  const auto favs=std::count_if(games.begin(),games.end(),[](const Game& g){return g.favorite;});
  label(dc,std::to_wstring(games.size())+L" jogos   ·   "+std::to_wstring(favs)+L" favoritos",box(27,246,166,22),smallFont,muted);
  button(dc,collectionsHome?L"+  Nova coleção":L"+  Adicionar jogo",box(18,285,172,43),collectionsHome?A_NEW_COLLECTION:A_ADD);

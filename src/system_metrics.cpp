@@ -98,6 +98,10 @@ NetworkSample readNetwork(){
  if(SUCCEEDED(initialized))CoUninitialize();
  return out;
 }
+void sampleNetworkNow(){
+ NetworkSample sample;try{sample=readNetwork();}catch(...){}
+ std::lock_guard<std::mutex> lock(networkMutex);network=std::move(sample);
+}
 void refreshSystemMetrics(bool force){
  const auto now=GetTickCount64();
  if(force||!memory.valid||now-lastMemory>=1000){memory=readProcessMemory();lastMemory=now;}
@@ -105,8 +109,7 @@ void refreshSystemMetrics(bool force){
  if(!selfTesting&&!shuttingDown.load()&&!pending.load()&&(force||now-lastNetwork>=3000)){
   lastNetwork=now;pending=true;
   try {networkWorker=std::thread([]{
-   NetworkSample sample;try{sample=readNetwork();}catch(...){}
-   {std::lock_guard<std::mutex> lock(networkMutex);network=std::move(sample);}
+   sampleNetworkNow();
    pending=false;if(win)PostMessageW(win,METRICS_READY,0,0);
   });}catch(...){pending=false;}
  }
@@ -123,9 +126,9 @@ std::wstring memoryDetails(){
 }
 std::wstring networkHeadline(const NetworkSample& sample){
  switch(sample.kind){
- case NetworkKind::WiFi:return sample.signalPercent<0?L"Wi-Fi · sinal indisponível":L"Wi-Fi · "+std::to_wstring(sample.signalPercent)+L"%";
- case NetworkKind::Ethernet:return L"Ethernet · cabo conectado";
- case NetworkKind::Other:return L"Rede conectada";
+ case NetworkKind::WiFi:return sample.signalPercent<0?L"Wi-Fi · sinal indisponível":L"Wi-Fi · "+std::to_wstring(sample.signalPercent)+L"%"+(sample.connectivityKnown&&!sample.internet?L" · sem internet":L"");
+ case NetworkKind::Ethernet:return sample.connectivityKnown&&!sample.internet?L"Ethernet · sem internet":L"Ethernet · cabo conectado";
+ case NetworkKind::Other:return sample.connectivityKnown&&!sample.internet?L"Rede · sem internet":L"Rede conectada";
  case NetworkKind::Offline:return L"Sem conexão";
  default:return L"Consultando rede…";
  }

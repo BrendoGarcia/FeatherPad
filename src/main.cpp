@@ -60,7 +60,7 @@ int WINAPI wWinMain(HINSTANCE h,HINSTANCE,LPWSTR args,int) {
    result=state==-1?1:0;
   }
  }
- shutdownUpdates();bridgeShutdown();clearArt();destroyTheme();if(imaging)imaging->Release();CoUninitialize();if(singleton)CloseHandle(singleton);
+ shutdownUpdates();shutdownSystemMetrics();bridgeShutdown();clearArt();destroyTheme();if(imaging)imaging->Release();CoUninitialize();if(singleton)CloseHandle(singleton);
  return result;
 }
 

@@ -19,6 +19,7 @@ MemorySample readProcessMemory();
 MemorySample currentMemory();
 NetworkSample readNetwork();
 NetworkSample currentNetwork();
+void sampleNetworkNow();
 void refreshSystemMetrics(bool force=false);
 void shutdownSystemMetrics();
 std::wstring formatMiB(std::uint64_t bytes);

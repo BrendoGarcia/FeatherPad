@@ -1,5 +1,6 @@
 #include "app.h"
 #include <psapi.h>
+#include <thread>
 namespace {
  void screenshot(HWND h,const wchar_t* path){
   RECT r{};GetClientRect(h,&r);HDC dc=GetDC(h),copy=CreateCompatibleDC(dc);
@@ -82,7 +83,9 @@ int regressions115(std::string& log){
  check(wifiBars(-1)==-1&&wifiBars(0)==0&&wifiBars(1)==1&&wifiBars(25)==1&&wifiBars(26)==2&&wifiBars(75)==3&&wifiBars(76)==4&&wifiBars(100)==4,"115 Wi-Fi bars map only real driver signal quality and preserve unknown");
  NetworkSample wifi;wifi.kind=NetworkKind::WiFi;wifi.signalPercent=25;drawNetworkStatus(canvas,RECT{0,0,246,36},wifi);const auto weak=GetPixel(canvas,29,11);wifi.signalPercent=100;drawNetworkStatus(canvas,RECT{0,0,246,36},wifi);const auto strong=GetPixel(canvas,29,11);
  check(weak!=strong&&strong==RGB(100,229,193),"115 actual signal level changes the visual strength bars");
+ wifi.connectivityKnown=true;wifi.internet=false;check(networkHeadline(wifi).find(L"sem internet")!=std::wstring::npos&&wifiBars(wifi.signalPercent)==4,"115 signal strength and internet availability are reported separately");
  NetworkSample cable;cable.kind=NetworkKind::Ethernet;check(networkHeadline(cable).find(L"Ethernet")!=std::wstring::npos&&cable.signalPercent==-1,"115 Ethernet uses a cable indicator without invented signal strength");
+ std::thread networkProbe(sampleNetworkNow);networkProbe.join();const auto actualNetwork=currentNetwork();check(actualNetwork.kind!=NetworkKind::Unknown&&actualNetwork.signalPercent>=-1&&actualNetwork.signalPercent<=100&&(actualNetwork.kind==NetworkKind::WiFi||actualNetwork.signalPercent==-1),"115 live network query identifies the Windows adapter without a simulated signal");
  openPage(Page::Metrics);screenshot(panel,L"metrics-115.bmp");closePanel();
  SelectObject(canvas,old);DeleteObject(bmp);DeleteDC(canvas);ReleaseDC(win,dc);
  collectionsHome=false;collectionFilter.clear();rebuildLibrary();saveDatabase();
