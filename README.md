@@ -13,6 +13,8 @@ Um launcher nativo para Windows que reúne seus jogos, permite navegar pelo cont
 
 **Interface nativa · Biblioteca com capas · Favoritos · Controle USB/Bluetooth · Build pelo GitHub**
 
+**Multiplayer local com até 4 controles · Categorias · Perfis por dispositivo · Estatísticas e medição de RAM/rede/bateria**
+
 [📦 Downloads](https://github.com/BrendoGarcia/FeatherPad/releases) · [⚙️ Compilar pelo GitHub](#️-build-pelo-github-sem-instalar-compilador) · [📖 Guia operacional](LEIA-ME.md) · [🐛 Relatar problema](https://github.com/BrendoGarcia/FeatherPad/issues)
 
 </div>
@@ -468,3 +470,4 @@ O FeatherPad é distribuído sob a [licença MIT](LICENSE). Dependências de ter
 **Feito para escolher um jogo, pegar o controle e jogar.** 🎮
 
 </div>
+

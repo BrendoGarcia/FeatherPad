@@ -1,4 +1,31 @@
-# Correções 1.0.1 — capas, teclado e atualização de Releases
+# FeatherPad 1.1.0 — multiplayer, perfis e biblioteca
+
+## Multiplayer, perfis e biblioteca
+
+- **Multiplayer local:** quando a compatibilidade SDL/ViGEm está ativa, até quatro
+  controles reconhecidos podem alimentar saídas virtuais independentes. O Windows
+  atribui cada posição XInput disponível; a tela de diagnóstico mostra os dispositivos
+  e os índices que o sistema realmente concedeu. No modo nativo, o jogo recebe os
+  controles físicos diretamente. A compatibilidade continua sujeita às vagas livres
+  no driver virtual e ao suporte do jogo ao formato escolhido.
+- **Perfis por controle:** atalhos e zona morta dos analógicos são salvos pela identidade
+  do dispositivo (caminho HID, com GUID SDL como alternativa). Em dispositivos que não
+  reportam identidade persistente, reconectar por outra porta pode criar um perfil novo.
+  A opção Ajustar calibração alterna a zona morta entre níveis predefinidos.
+- **RAM e conectividade:** a tela principal informa memória privada e residente do
+  FeatherPad, estado de conectividade do Windows e bateria informada pelo controle.
+  Alguns modelos/drivers não disponibilizam o nível da bateria; nesses casos aparece
+  “n/d”. A conectividade usa o estado de rede do Windows e não testa um site externo.
+- **Categorias:** no editor de jogos, informe uma ou mais categorias separadas por
+  ponto e vírgula, por exemplo `Corrida; Multiplayer`. O botão Coleções filtra jogos
+  por essas categorias e oferece coleções comuns como Corrida, Campanha e Emuladores.
+- **Estatísticas:** Detalhes mostra último início e quantidade de aberturas confirmadas.
+  O tempo é acompanhado para executáveis `.exe` diretos enquanto o FeatherPad continua
+  aberto; atalhos, URIs e launchers externos podem não revelar qual processo é o jogo.
+
+O modo de compatibilidade cria uma saída virtual por jogador conectado, até quatro.
+O número XInput depende dos slots disponíveis no Windows; o FeatherPad não consegue
+reservar um índice ocupado por outro dispositivo ou emulador.
 
 - **Capas em tela cheia:** recortes arredondados agora usam um caminho GDI que acompanha
   a transformação da tela. Testes verificam pixels em 1366×768, 1920×1080 e 2560×1440.
@@ -367,9 +394,9 @@ O runtime C++ e o cliente ViGEm são vinculados estaticamente. Mantenha a SDL3.d
 
 ## Verificação desta entrega
 
-A versão anterior foi testada pelo usuário e funcionou no seu PC. A base da versão 2 foi compilada para Windows x64 por compilação cruzada com GCC/MinGW, com avisos tratados como erros. Isso verifica sintaxe, tipos, recursos e linkedição; não substitui executar no Windows.
+A versão anterior foi testada pelo usuário e funcionou no seu PC. Esta atualização foi compilada para Windows x64 por compilação cruzada com GCC/MinGW, com avisos tratados como erros. Isso verifica sintaxe, tipos, recursos e linkedição; não substitui executar no Windows.
 
-Os testes nativos incluídos rodam pelo GitHub Actions no Windows: migração da v1, Unicode/aspas, favoritos, backup, importação e cache de imagens, abertura das janelas e captura de botões simulada. Não houve teste físico de Bluetooth/USB nem medição de RAM nesta entrega. Não afirmamos que os testes Windows passaram antes de executar o workflow no seu repositório.
+Os testes nativos incluídos rodam pelo GitHub Actions no Windows: migração, categorias, estatísticas, perfis de controle, calibração, imagens, tradução e quatro entradas SDL virtuais. O teste automatizado não substitui a verificação de quatro controles físicos, Bluetooth, bateria e slots do driver no seu computador.
 
 Depois do build, confira:
 
@@ -396,3 +423,4 @@ Depois do build, confira:
 - `.github/workflows/build.yml`: compilação e verificação no Windows.
 
 Referências técnicas: [Raw Input](https://learn.microsoft.com/en-us/windows/win32/inputdev/raw-input), [HID](https://learn.microsoft.com/en-us/windows-hardware/drivers/hid/interpreting-hid-reports) e [WIC Bitmap Scaler](https://learn.microsoft.com/en-us/windows/win32/api/wincodec/nn-wincodec-iwicbitmapscaler).
+

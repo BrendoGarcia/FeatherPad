@@ -43,13 +43,13 @@ int WINAPI wWinMain(HINSTANCE h,HINSTANCE,LPWSTR args,int) {
  wc.lpszClassName=L"FeatherPadPanel";wc.lpfnWndProc=panelProc;RegisterClassW(&wc);
  wc.lpszClassName=L"FeatherPadCapture";wc.lpfnWndProc=captureProc;RegisterClassW(&wc);
  RECT bounds{0,0,1180,780};AdjustWindowRect(&bounds,WS_OVERLAPPEDWINDOW,FALSE);
- win=CreateWindowExW(0,L"FeatherPadWindow",L"FeatherPad v1.0.1 — Sua biblioteca de jogos",WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN,CW_USEDEFAULT,CW_USEDEFAULT,bounds.right-bounds.left,bounds.bottom-bounds.top,nullptr,nullptr,h,nullptr);
+ win=CreateWindowExW(0,L"FeatherPadWindow",L"FeatherPad — Sua biblioteca de jogos",WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN,CW_USEDEFAULT,CW_USEDEFAULT,bounds.right-bounds.left,bounds.bottom-bounds.top,nullptr,nullptr,h,nullptr);
  int result=1;
  if(win) {
   darkTitle(win);rebuildLibrary();
   if(selfTesting){result=runSelfTest();if(panel)closePanel();DestroyWindow(win);}
   else {
-   bridgeReconfigure();
+   bridgeReconfigure();SetTimer(win,LIBRARY_TIMER,1000,nullptr);
    if(!registerControllers())MessageBoxW(win,L"Não foi possível registrar os controles. Teclado e mouse continuam disponíveis.",L"FeatherPad",MB_ICONWARNING);
    tray.cbSize=sizeof(tray);tray.hWnd=win;tray.uID=1;tray.uFlags=NIF_MESSAGE|NIF_ICON|NIF_TIP;tray.uCallbackMessage=TRAY;tray.hIcon=icon;
    lstrcpyW(tray.szTip,L"FeatherPad v1.0.1— sua biblioteca de jogos");
@@ -63,3 +63,4 @@ int WINAPI wWinMain(HINSTANCE h,HINSTANCE,LPWSTR args,int) {
  shutdownUpdates();bridgeShutdown();clearArt();destroyTheme();if(imaging)imaging->Release();CoUninitialize();if(singleton)CloseHandle(singleton);
  return result;
 }
+

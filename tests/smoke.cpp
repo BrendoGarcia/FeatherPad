@@ -27,12 +27,15 @@ int runSelfTest() {
  check(!controllerCompatibility&&defaultControllerMode==ControllerMode::Xbox&&(games.empty()||games[0].controllerMode==ControllerMode::Auto),"legacy libraries do not enable emulation or lose games during upgrade");
  if(games.empty()){cleanup(dataFolder);return 1;}
  check(profileName==L"Jogador"&&!games[0].favorite&&games[0].cover.empty(),"new fields default safely during upgrade");
- games[0].args=L"--name \"a b\"";games[0].note=L"Ação, aventura e exploração";games[0].favorite=true;profileName=L"Brendo \"Player\"";
+ games[0].args=L"--name \"a b\"";games[0].note=L"Ação, aventura e exploração";games[0].categories=L"Campanha; Emuladores; campanha";games[0].launches=7;games[0].lastLaunch=133800000000000000ULL;games[0].playedSeconds=3723;games[0].favorite=true;profileName=L"Brendo \"Player\"";
  check(saveDatabase(),"atomic v2 database write");loadDatabase();
- check(games.size()==1&&games[0].favorite&&games[0].args==L"--name \"a b\""&&profileName==L"Brendo \"Player\"","Unicode, quotes and favorites round trip");
+ check(games.size()==1&&games[0].favorite&&games[0].args==L"--name \"a b\""&&profileName==L"Brendo \"Player\""&&games[0].categories==L"Campanha; Emuladores; campanha"&&games[0].launches==7&&games[0].playedSeconds==3723,"Unicode, categories and game statistics round trip");
+ check(splitCollections(L"Corrida; Multiplayer; corrida").size()==2&&inCollection(L"Corrida; Campanha",L"campanha")&&!inCollection(L"Corrida",L"Campanha"),"collection parsing ignores case and composes game categories");
+ PadState calibrated{};calibrated.lx=4000;calibrated.ly=-16000;calibrated.rx=32767;calibrated=calibratePad(calibrated,8000);check(calibrated.lx==0&&calibrated.ly<0&&calibrated.rx==32767,"per-controller stick deadzone suppresses drift and preserves full travel");
  games[0].controllerMode=ControllerMode::PlayStation;defaultControllerMode=ControllerMode::PlayStation;controllerCompatibility=true;preferredControllerGuid=L"test-controller-guid";
  check(saveDatabase(),"write controller compatibility preferences");loadDatabase();
  check(controllerCompatibility&&defaultControllerMode==ControllerMode::PlayStation&&games[0].controllerMode==ControllerMode::PlayStation&&preferredControllerGuid==L"test-controller-guid","global and per-game controller choices survive restart");
+ useControllerProfile(L"test-physical-device");*profileBinding(A_CAPTURE_OPEN)=22;*profileBinding(A_CAPTURE_OK)=23;setProfileDeadzone(12000);check(saveDatabase(),"persist per-controller shortcuts and calibration");loadDatabase();useControllerProfile(L"test-physical-device");check(*profileBinding(A_CAPTURE_OPEN)==22&&*profileBinding(A_CAPTURE_OK)==23&&profileDeadzone()==12000,"physical controller shortcuts and calibration survive restart");useControllerProfile(L"");
  controllerCompatibility=false;defaultControllerMode=ControllerMode::Xbox;preferredControllerGuid.clear();
  check(GetFileAttributesW((ini+L".backup").c_str())!=INVALID_FILE_ATTRIBUTES,"pre-upgrade database backup exists");
  Game second;second.name=L"Second Game";second.path=L"C:\\Games\\Second.exe";games.push_back(second);
@@ -123,7 +126,7 @@ int runSelfTest() {
  ShowWindow(win,SW_MINIMIZE);show();
  check(IsWindowVisible(win)&&!IsIconic(win)&&IsZoomed(win),"restoring a minimized maximized window preserves maximization");
  ShowWindow(win,SW_SHOWNORMAL);
- openPage(Page::Settings);check(panel&&IsWindow(panel),"open dedicated settings window");
+ openPage(Page::Settings);check(panel&&IsWindow(panel),"open dedicated settings window");check(GetDlgItem(panel,A_PLAYER_PROFILE)!=nullptr&&GetDlgItem(panel,A_CALIBRATE)!=nullptr,"settings expose physical-device shortcut profiles and calibration controls");
  beginCapture(A_CAPTURE_OPEN);check(captureWin&&captureAction==A_CAPTURE_OPEN,"open action-specific controller popup");
  HANDLE fake=reinterpret_cast<HANDLE>(static_cast<INT_PTR>(123));
  controllerButtons(fake,{6},{});check(captureCandidate==0,"held input cannot bind before a release report");
@@ -134,6 +137,7 @@ int runSelfTest() {
  commitCapture();check(!captureWin&&openButton==6,"save captured button and close only capture popup");
  beginCapture(A_CAPTURE_OPEN);controllerButtons(fake,{},{});controllerButtons(fake,{7},{});closeCapture();
  check(openButton==6,"cancel capture preserves saved binding");closePanel();loadDatabase();check(openButton==6,"saved binding survives reload");
+ HANDLE fakeDevice=reinterpret_cast<HANDLE>(static_cast<INT_PTR>(456));Device profileDevice;profileDevice.path=L"test-hid-profile";devices[fakeDevice]=profileDevice;openPage(Page::Settings);SendMessageW(GetDlgItem(panel,A_PLAYER_PROFILE),CB_SETCURSEL,0,0);action(A_PLAYER_PROFILE);check(currentControllerProfile()==L"test-hid-profile","settings select a physical controller profile for shortcut and calibration edits");closePanel();devices.erase(fakeDevice);useControllerProfile(L"");
  openPage(Page::Profile);check(panel&&page==Page::Profile,"profile editor opens independently");closePanel();
  openPage(Page::Editor,0);check(GetDlgItem(panel,400)!=nullptr&&GetDlgItem(panel,A_SAVE_GAME)!=nullptr,"game editor fields and save control exist");
  SetWindowTextW(GetDlgItem(panel,400),L"Edited through native UI");action(A_SAVE_GAME);

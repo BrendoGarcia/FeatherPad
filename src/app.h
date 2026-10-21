@@ -26,6 +26,7 @@ extern "C" {
 #include "UpdateManager.h"
 #include "controller_state.h"
 #include "gamepad_bridge.h"
+#include "library_features.h"
 
 constexpr UINT TRAY=WM_APP+1, FINISH_CAPTURE=WM_APP+2;
 enum Action {
@@ -33,15 +34,18 @@ enum Action {
  A_PREV,A_NEXT,A_CLOSE_PANEL,A_SAVE_GAME,A_DELETE_GAME,A_BROWSE_GAME,A_BROWSE_COVER,A_CLEAR_COVER,
  A_STARTUP,A_AUTOOPEN,A_CAPTURE_OPEN,A_CAPTURE_OK,A_CAPTURE_BACK,A_CAPTURE_STAR,A_DIAG,
  A_CAPTURE_SAVE,A_CAPTURE_CANCEL,A_SAVE_PROFILE,A_BROWSE_AVATAR,A_CLEAR_AVATAR,A_DRAFT_FAVORITE,
- A_COMPAT,A_COMPAT_TOGGLE,A_COMPAT_RETRY,A_COMPAT_DRIVER,A_COMPAT_HIDHIDE,A_COMPAT_MAPPINGS,A_COMPAT_DEFAULT,A_COMPAT_SOURCE,A_SEARCH,A_CLEAR_SEARCH,A_FULLSCREEN,A_UPDATES
+ A_COMPAT,A_COMPAT_TOGGLE,A_COMPAT_RETRY,A_COMPAT_DRIVER,A_COMPAT_HIDHIDE,A_COMPAT_MAPPINGS,A_COMPAT_DEFAULT,A_COMPAT_SOURCE,A_SEARCH,A_CLEAR_SEARCH,A_FULLSCREEN,A_UPDATES,A_PLAYERS,A_SAVE_PLAYERS,A_COLLECTIONS,A_SAVE_COLLECTION,A_GAME_DETAILS,A_SAVE_DETAILS,A_STATS,A_PLAYER_PROFILE,A_CALIBRATE
 };
-enum class Page { None, Editor, Settings, Profile, Diagnostic, Compatibility };
+enum class Page { None, Editor, Settings, Profile, Diagnostic, Compatibility, Players, Collections, Details, Statistics };
 struct Game {
  std::wstring name,path,args,dir,cover,note;
+ std::wstring id,categories;
+ unsigned long long launches=0,lastLaunch=0,playedSeconds=0;
  bool favorite=false;
  ControllerMode controllerMode=ControllerMode::Auto;
 };
 struct Device {
+ std::wstring path;
  std::vector<BYTE> descriptor;
  std::vector<HIDP_VALUE_CAPS> values;
  std::set<USAGE> previous;
@@ -119,3 +123,12 @@ void rawInput(LPARAM l);
 void deviceChange(WPARAM w,LPARAM l);
 bool registerControllers();
 int runSelfTest();
+// Physical controller profiles (keyed by SDL device path/GUID).
+void loadControllerProfiles();
+std::wstring serializeControllerProfiles();
+void useControllerProfile(const std::wstring& key);
+std::wstring currentControllerProfile();
+unsigned* profileBinding(int action);
+int profileDeadzone();
+void setProfileDeadzone(int value);
+PadState calibratePad(PadState state,int deadzone);
