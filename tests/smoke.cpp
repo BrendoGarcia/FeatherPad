@@ -56,6 +56,10 @@ int runSelfTest() {
  GetWindowRect(GetDlgItem(keyboardWindow,761),&spaceRect);GetWindowRect(GetDlgItem(keyboardWindow,701),&letterRect);
  snapshot(keyboardWindow,L"keyboard-preview.bmp");
  check(aRect.left>qRect.left&&spaceRect.right-spaceRect.left>4*(letterRect.right-letterRect.left),"keyboard uses staggered QWERTY rows and wide space bar");
+ std::wstring availableSymbols;
+ for(int mode=0;mode<4;++mode){for(int code=0;code<=28;++code)if(HWND key=GetDlgItem(keyboardWindow,700+code))availableSymbols+=textOf(key);SetFocus(GetDlgItem(keyboardWindow,768));keyboardConfirm();}
+ bool completeSymbols=true;for(wchar_t symbol:std::wstring(L"\"'/:;[]{}\\"))if(availableSymbols.find(symbol)==std::wstring::npos)completeSymbols=false;
+ check(completeSymbols,"keyboard pages include quotes, paths and argument punctuation");
  SetFocus(GetDlgItem(keyboardWindow,700));keyboardConfirm();keyboardDirection(1,0);keyboardConfirm();
  check(textOf(GetDlgItem(keyboardWindow,690))==L"qw","controller navigation types on virtual keys");
  SetFocus(GetDlgItem(keyboardWindow,768));keyboardConfirm();SetFocus(GetDlgItem(keyboardWindow,700));keyboardConfirm();

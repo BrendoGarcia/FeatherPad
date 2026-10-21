@@ -9,7 +9,7 @@ namespace {
  HFONT keyFont=nullptr,textFont=nullptr,titleFont=nullptr;
  bool upper=false;int layout=0,keyFocus=0,hoverKey=-1;
  WINDOWPLACEMENT placement{};LONG_PTR oldStyle=0,oldExStyle=0;
- const std::wstring layouts[]={L"qwertyuiopasdfghjklzxcvbnm",L"1234567890@#$%&*()-_+=/\\:;\"",L"áàâãäéèêëíìîïóòôõöúùûüñç€£",LR"KEYS(!?'[]{}<>|~^`,.:;@#$%&*+-=\/)KEYS"};
+ const std::wstring layouts[]={L"qwertyuiopasdfghjklzxcvbnm",L"1234567890@#$%&*()-_+=/\\:;\"",L"áàâãäéèêëíìîïóòôõöúùûüñç€£",LR"KEYS(!"?'[]{}<>|~^`,.:;@#$%&*+-=\/)KEYS"};
  const std::vector<int> characters={0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,20,21,22,23,24,25,26};
  wchar_t character(int code){
   if(code==27)return L',';
