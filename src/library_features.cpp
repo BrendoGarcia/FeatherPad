@@ -10,6 +10,7 @@ std::vector<Session> sessions;
 ULONGLONG lastSave=0;
 std::wstring metrics=L"Medição pendente";
 bool same(const std::wstring& a,const std::wstring& b){return CompareStringOrdinal(a.c_str(),-1,b.c_str(),-1,TRUE)==CSTR_EQUAL;}
+bool samePath(std::wstring a,std::wstring b){auto normalize=[](std::wstring& p){if(p.rfind(L"\\\\?\\",0)==0)p.erase(0,4);std::replace(p.begin(),p.end(),L'/',L'\\');while(p.size()>3&&p.back()==L'\\')p.pop_back();};normalize(a);normalize(b);return same(a,b);}
 }
 std::wstring newLibraryId(){GUID id{};if(FAILED(CoCreateGuid(&id)))return L"";wchar_t value[40]{};StringFromGUID2(id,value,40);return value;}
 std::vector<std::wstring> splitCollections(const std::wstring& text){
@@ -24,7 +25,7 @@ void recordLaunch(size_t index,HANDLE process){
  FILETIME now{};GetSystemTimeAsFileTime(&now);ULARGE_INTEGER value{};value.LowPart=now.dwLowDateTime;value.HighPart=now.dwHighDateTime;g.lastLaunch=value.QuadPart;
  // Only count a direct executable whose returned process is that executable.
  wchar_t actual[32768]{},expected[32768]{};DWORD size=32768;
- bool direct=process&&g.path.size()>4&&same(g.path.substr(g.path.size()-4),L".exe")&&GetFullPathNameW(g.path.c_str(),32768,expected,nullptr)&&QueryFullProcessImageNameW(process,0,actual,&size)&&same(actual,expected);
+ bool direct=process&&g.path.size()>4&&same(g.path.substr(g.path.size()-4),L".exe")&&GetFullPathNameW(g.path.c_str(),32768,expected,nullptr)&&QueryFullProcessImageNameW(process,0,actual,&size)&&samePath(actual,expected);
  DWORD pid=process?GetProcessId(process):0;
  if(direct&&sessions.size()<32&&std::none_of(sessions.begin(),sessions.end(),[&](const auto& s){return GetProcessId(s.process)==pid;}))sessions.push_back({g.id,process,GetTickCount64()});else if(process)CloseHandle(process);
  saveDatabase();

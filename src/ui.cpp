@@ -260,7 +260,7 @@ void drawButton(const DRAWITEMSTRUCT* item) {
 void openPage(Page requested,int gameIndex) {
  if(panel){SetForegroundWindow(captureWin?captureWin:panel);return;}
  show();page=requested;editorIndex=gameIndex;std::fill(std::begin(fields),std::end(fields),nullptr);
- const wchar_t* title=requested==Page::Editor?(gameIndex<0?L"Adicionar jogo":L"Editar jogo"):requested==Page::Profile?L"Seu perfil":requested==Page::Diagnostic?L"Diagnóstico do controle":requested==Page::Compatibility?L"Compatibilidade dos jogos":L"Configurações";
+ const wchar_t* title=requested==Page::Editor?(gameIndex<0?L"Adicionar jogo":L"Editar jogo"):requested==Page::Profile?L"Seu perfil":requested==Page::Diagnostic?L"Controles e jogadores":requested==Page::Compatibility?L"Compatibilidade dos jogos":requested==Page::Collections?L"Coleções":requested==Page::Statistics?L"Estatísticas do jogo":L"Configurações";
  const int height=requested==Page::Editor?730:requested==Page::Profile?340:requested==Page::Diagnostic?300:requested==Page::Compatibility?580:640;
  panel=ownedWindow(L"FeatherPadPanel",title,650,height,win);if(!panel){page=Page::None;return;}
  EnableWindow(win,FALSE);

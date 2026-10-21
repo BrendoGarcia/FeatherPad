@@ -44,7 +44,8 @@ namespace {
      if(val>=v.LogicalMin&&val<=v.LogicalMax&&hat>=0&&hat<8){const int directions[]={-2,1,1,1,2,-1,-1,-1};hatDirection=directions[hat];}
     } else if(v.LogicalMax>v.LogicalMin) {
      const double normalized=(static_cast<double>(val)-v.LogicalMin)/(static_cast<double>(v.LogicalMax)-v.LogicalMin);
-     const int dir=normalized<0.25?-1:normalized>0.75?1:0;
+     const double deadzone=std::min(0.45,static_cast<double>(profileDeadzone())/65534.0);
+     const int dir=normalized<0.5-deadzone?-1:normalized>0.5+deadzone?1:0;
      if(usage==0x30)xDirection=dir;else yDirection=dir*2;
     }
    }
