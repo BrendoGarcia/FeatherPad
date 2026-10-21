@@ -4,6 +4,7 @@
 #include <iostream>
 #include <shellapi.h>
 #include <sstream>
+#include <algorithm>
 #include "fixtures/zip_fixture.h"
 int runTests(){
  // Run the real helper against a disposable installation, never the user's launcher.
