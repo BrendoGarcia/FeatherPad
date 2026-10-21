@@ -72,7 +72,7 @@ int runTests(){
  check(changedFiles(extracted,(root/L"same-install").wstring()).empty(),"already updated means identical contents, not tag ordering");
  write(root/L"same-install"/L"FeatherPad.exe","different");check(changedFiles(extracted,(root/L"same-install").wstring()).size()==1,"same internal version with changed executable remains detectable");
  auto zipMetadata=parseJson("{\"draft\":false,\"prerelease\":false,\"tag_name\":\"1.0.1\",\"assets\":[{\"name\":\"FeatherPad-Windows-x64.zip\",\"digest\":\"sha256:"+std::string(64,'a')+"\",\"size\":123,\"browser_download_url\":\"https://github.com/BrendoGarcia/FeatherPad/releases/download/1.0.1/FeatherPad-Windows-x64.zip\"}]}");
- check(releaseDistribution(zipMetadata).archive,"actual 1.0.1 ZIP-only release format is recognized despite internal 2.2 version");
+ check(releaseDistribution(zipMetadata).archive,"actual 1.0.1 ZIP-only release format is recognized despite internal 1.0.1 version");
  auto corrupt=std::vector<unsigned char>(std::begin(zipFixture),std::end(zipFixture));corrupt[44]^=255;
  {std::ofstream out(root/L"corrupt.zip",std::ios::binary);out.write(reinterpret_cast<const char*>(corrupt.data()),corrupt.size());}
  bool rejected=false;try{extractUpdateZip((root/L"corrupt.zip").wstring(),(root/L"extracted").wstring());}catch(...){rejected=true;}check(rejected,"corrupt ZIP payload is rejected before installation");
