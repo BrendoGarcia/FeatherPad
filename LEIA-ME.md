@@ -1,4 +1,4 @@
-# Correções 2.2.1 — capas, teclado e atualização de Releases
+# Correções 1.0.1 — capas, teclado e atualização de Releases
 
 - **Capas em tela cheia:** recortes arredondados agora usam um caminho GDI que acompanha
   a transformação da tela. Testes verificam pixels em 1366×768, 1920×1080 e 2560×1440.
@@ -9,7 +9,7 @@
 - **Atualizações:** a tag pública e a versão interna deixam de ser comparadas como se
   fossem a mesma numeração. A detecção compara tamanho e SHA-256 dos arquivos reais.
   Assim, uma Release chamada 1.0.1 não é descartada porque o programa foi compilado
-  internamente como 2.2.0. Executáveis com versão interna inferior são bloqueados antes
+  internamente como 1.0.1. Executáveis com versão interna inferior são bloqueados antes
   de aplicar; alterações na mesma versão interna podem ser instaladas após confirmação.
 
 ## Releases com ZIP ou arquivos individuais
@@ -20,7 +20,7 @@ produzido pelo workflow). Nesse caso oferece baixar o ZIP para inspecionar o con
 não informa que o aplicativo está atualizado sem conferir os arquivos.
 
 O ZIP é conferido pelo SHA-256 fornecido pela API do GitHub. A extração é nativa, usando
-somente o inflador estático da zlib 1.3.1: não abre PowerShell, navegador ou outro programa.
+somente o inflador estático da zlib 1.0.1: não abre PowerShell, navegador ou outro programa.
 São aceitos ZIP armazenado/Deflate e um pacote na raiz ou dentro de uma pasta. ZIP64,
 criptografia, links, caminhos absolutos/ascendentes, nomes duplicados, CRC incorreto e
 arquivos fora dos limites são rejeitados. Apenas os arquivos conhecidos são extraídos;
@@ -38,15 +38,15 @@ O script de pacote verifica a versão do binário e exercita a extração do ZIP
 publicação pelo workflow, use uma tag `v` seguida dessa versão. Tags manuais com outra
 numeração continuam reconhecidas pelo atualizador, por comparação de conteúdo.
 
-**Migração:** o botão da 2.2.0 continua contendo a lógica antiga. Para receber esta
-correção, encerre o monitor e extraia uma vez o pacote completo da 2.2.1. Depois use o
+**Migração:** o botão da 1.0.1 continua contendo a lógica antiga. Para receber esta
+correção, encerre o monitor e extraia uma vez o pacote completo da 1.0.1. Depois use o
 botão corrigido para Releases futuras. Nada é alterado nas Releases já publicadas.
 
 ---
 
-## Guia da versão 2.2 (recursos preservados; atualização revisada acima)
+## Guia da versão 1.0.1 (recursos preservados; atualização revisada acima)
 
-# FeatherPad 2.2 — pesquisa, teclado virtual, tela cheia e atualizações
+# FeatherPad 1.0.1 — pesquisa, teclado virtual, tela cheia e atualizações
 
 ## Pesquisa pelo controle
 
@@ -77,7 +77,7 @@ Diálogos e teclado virtual continuam sendo janelas nativas sobre a biblioteca.
 
 ## Atualizar sem baixar novamente o pacote inteiro
 
-**Uma vez:** para migrar de 2.1 ou anterior, extraia o pacote completo de 2.2 com
+**Uma vez:** para migrar de 2.1 ou anterior, extraia o pacote completo de 1.0.1 com
 `FeatherPad.exe`, `Updater.exe`, `SDL3.dll`, instruções e licenças. A versão antiga
 não possui o botão nem o componente de atualização.
 
