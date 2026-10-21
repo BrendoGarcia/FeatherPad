@@ -1,4 +1,4 @@
-# Correções 1.0.1 — capas, teclado e atualização de Releases
+# FeatherPad 1.1.0 — multiplayer, perfis e biblioteca
 
 ## Multiplayer, perfis e biblioteca
 

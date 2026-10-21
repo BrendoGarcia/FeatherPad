@@ -1,4 +1,5 @@
 #include "app.h"
+#include <cstdlib>
 #include <cwchar>
 struct InputProfile {std::wstring key;unsigned open=13,confirm=2,back=3,favorite=4;int deadzone=8000;};
 namespace {std::vector<InputProfile> profiles;}

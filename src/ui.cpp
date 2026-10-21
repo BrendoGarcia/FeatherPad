@@ -10,6 +10,8 @@ namespace {
  bool favoriteDraft=false;
  HWND gameModeCombo=nullptr,defaultModeCombo=nullptr,sourceCombo=nullptr,collectionCombo=nullptr;
  std::vector<std::wstring> collectionValues;
+ HWND profileCombo=nullptr;
+ std::vector<std::wstring> profileKeys,profileLabels;
  std::wstring sourceSignature;
  std::vector<std::wstring> sourceGuids;
  int hovered=-1;
@@ -299,13 +301,20 @@ void openPage(Page requested,int gameIndex) {
   staticText(panel,gameStatistics(static_cast<size_t>(std::max(0,gameIndex))),box(26,68,598,280));
   nativeButton(panel,L"Concluir",box(486,590,138,34),A_CLOSE_PANEL);
  } else if(requested==Page::Settings) {
+  profileKeys.clear();profileLabels.clear();
+  for(const auto& item:bridgeSources()){if(profileKeys.size()>=4)break;profileKeys.push_back(item.key);profileLabels.push_back(item.name);}
+  for(const auto& entry:devices){if(profileKeys.size()>=4)break;const auto& key=entry.second.path;if(key.empty()||std::find(profileKeys.begin(),profileKeys.end(),key)!=profileKeys.end())continue;const auto slash=key.find_last_of(L"\\/#");profileKeys.push_back(key);profileLabels.push_back(slash==std::wstring::npos?key:key.substr(slash+1));}
+  if(!profileKeys.empty()){const auto current=currentControllerProfile();auto it=std::find(profileKeys.begin(),profileKeys.end(),current);useControllerProfile(it==profileKeys.end()?profileKeys.front():*it);}
   staticText(panel,L"CONTROLE",box(26,20,598,24));
   staticText(panel,L"Escolha uma ação. Um pop-up vai aguardar o botão que você quiser usar.",box(26,52,598,42));
   const wchar_t* labels[]={L"Abrir / ocultar launcher",L"Confirmar / jogar",L"Voltar / ocultar",L"Favoritar jogo"};
   const unsigned bindings[]={*profileBinding(A_CAPTURE_OPEN),*profileBinding(A_CAPTURE_OK),*profileBinding(A_CAPTURE_BACK),*profileBinding(A_CAPTURE_STAR)};
   for(int i=0;i<4;++i){const int y=106+i*58;staticText(panel,labels[i],box(26,y,306,34));nativeButton(panel,L"Botão "+std::to_wstring(bindings[i])+L"  ·  Alterar",box(350,y,274,34),A_CAPTURE_OPEN+i);}
-  staticText(panel,L"Perfil do controle físico conectado · zona morta do analógico: "+std::to_wstring(profileDeadzone()),box(26,338,390,30));
-  nativeButton(panel,L"Ajustar calibração",box(430,336,194,34),A_CALIBRATE);
+  staticText(panel,L"Perfil físico",box(26,338,132,30));
+  profileCombo=control(panel,L"COMBOBOX",L"",WS_TABSTOP|CBS_DROPDOWNLIST|WS_VSCROLL,box(154,336,262,150),A_PLAYER_PROFILE);
+  if(profileKeys.empty()){SendMessageW(profileCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(L"Conecte um controle"));SendMessageW(profileCombo,CB_SETCURSEL,0,0);}
+  else {for(const auto& name:profileLabels)SendMessageW(profileCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(name.c_str()));auto selected=std::find(profileKeys.begin(),profileKeys.end(),currentControllerProfile());SendMessageW(profileCombo,CB_SETCURSEL,selected==profileKeys.end()?0:static_cast<int>(selected-profileKeys.begin()),0);}
+  nativeButton(panel,L"Zona morta: "+std::to_wstring(profileDeadzone()),box(430,336,194,34),A_CALIBRATE);EnableWindow(GetDlgItem(panel,A_CALIBRATE),!profileKeys.empty());
   nativeButton(panel,L"Controles conectados e jogadores locais",box(26,382,598,34),A_DIAG);
   nativeButton(panel,L"Compatibilidade dos jogos...",box(26,426,598,34),A_COMPAT);
   nativeButton(panel,L"Iniciar com o Windows (em segundo plano)",box(26,470,598,28),A_STARTUP);
@@ -360,6 +369,8 @@ void closePanel() {
 void beginCapture(int requested) {
  if(captureWin)return;
  captureAction=requested;captureCandidate=0;captureArmed.clear();captureProfileKey.clear();
+ if(page==Page::Settings&&!profileKeys.empty()){const auto selected=SendMessageW(profileCombo,CB_GETCURSEL,0,0);if(selected>=0&&selected<static_cast<LRESULT>(profileKeys.size()))captureProfileKey=profileKeys[static_cast<size_t>(selected)];}
+ if(captureProfileKey.empty())captureProfileKey=currentControllerProfile();
  captureNotice=L"Pressione no controle o botão que vai "+std::wstring(requested==A_CAPTURE_OPEN?L"abrir o launcher.":requested==A_CAPTURE_OK?L"confirmar a seleção e iniciar um jogo.":requested==A_CAPTURE_BACK?L"voltar ou ocultar o launcher.":L"adicionar ou remover um jogo dos favoritos.");
  if(devices.empty()&&!selfTesting)captureNotice+=L"\n\nNenhum controle detectado. Conecte por Bluetooth ou USB para continuar.";
  captureWin=ownedWindow(L"FeatherPadCapture",L"Configurar botão do controle",534,326,panel?panel:win);
@@ -418,7 +429,8 @@ void action(int id) {
  case A_CAPTURE_OPEN:case A_CAPTURE_OK:case A_CAPTURE_BACK:case A_CAPTURE_STAR:beginCapture(id);break;
  case A_CAPTURE_SAVE:commitCapture();break;case A_CAPTURE_CANCEL:closeCapture();break;
  case A_DIAG:closePanel();openPage(Page::Diagnostic);break;
- case A_CALIBRATE:{const int old=profileDeadzone();const int next=old<4000?8000:old<8000?12000:old<12000?16000:0;setProfileDeadzone(next);if(!saveDatabase(panel)){setProfileDeadzone(old);}else {status(L"Calibração salva para o controle conectado.");closePanel();openPage(Page::Settings);}break;}
+ case A_CALIBRATE:{const int old=profileDeadzone();const int next=old<4000?8000:old<8000?12000:old<12000?16000:0;setProfileDeadzone(next);if(!saveDatabase(panel)){setProfileDeadzone(old);}else {SetWindowTextW(GetDlgItem(panel,A_CALIBRATE),(L"Zona morta: "+std::to_wstring(next)).c_str());status(L"Zona morta salva para este controle físico.");}break;}
+ case A_PLAYER_PROFILE:{const auto selected=SendMessageW(profileCombo,CB_GETCURSEL,0,0);if(selected<0||selected>=static_cast<LRESULT>(profileKeys.size()))break;useControllerProfile(profileKeys[static_cast<size_t>(selected)]);for(int i=0;i<4;++i)SetWindowTextW(GetDlgItem(panel,A_CAPTURE_OPEN+i),(L"Botão "+std::to_wstring(*profileBinding(A_CAPTURE_OPEN+i))+L"  ·  Alterar").c_str());SetWindowTextW(GetDlgItem(panel,A_CALIBRATE),(L"Zona morta: "+std::to_wstring(profileDeadzone())).c_str());break;}
  case A_COMPAT_TOGGLE: {
   controllerCompatibility=!controllerCompatibility;
   if(!saveDatabase(panel))controllerCompatibility=!controllerCompatibility;
@@ -578,6 +590,7 @@ void controllerDirection(int dx,int dy) {
  if(target>=0){keyboardFocus=target;if(hits[target].game>=0){selection=hits[target].game;keyboardFocus=-1;}InvalidateRect(win,nullptr,FALSE);}
 }
 void controllerButtons(HANDLE h,const std::set<USAGE>& now,const std::set<USAGE>& previous) {
+ if(captureWin&&!captureProfileKey.empty())useControllerProfile(captureProfileKey);
  if(keyboardWindow){if(!selfTesting&&GetForegroundWindow()!=keyboardWindow)return;for(auto b:now)if(!previous.count(b)){if(b==*profileBinding(A_CAPTURE_BACK)){closeVirtualKeyboard(false);return;}if(b==*profileBinding(A_CAPTURE_OK)){keyboardConfirm();return;}}return;}
  if(captureWin) {
   if(!selfTesting&&GetForegroundWindow()!=captureWin)return;
@@ -595,7 +608,7 @@ void controllerButtons(HANDLE h,const std::set<USAGE>& now,const std::set<USAGE>
    const int slot=captureAction-A_CAPTURE_OPEN;bool collision=false;
    for(int i=0;i<4;++i)if(i!=slot&&used[i]==b)collision=true;
    if(collision){captureNotice=L"O botão "+std::to_wstring(b)+L" já está em uso por outra ação. Solte-o e escolha um botão diferente.";captureArmed.erase(h);InvalidateRect(captureWin,nullptr,FALSE);return;}
-   captureCandidate=b;captureProfileKey=currentControllerProfile();captureNotice=L"Botão "+std::to_wstring(b)+L" identificado.\n\nSalve para aplicar à ação escolhida, ou cancele para manter o botão anterior.";
+   captureCandidate=b;captureNotice=L"Botão "+std::to_wstring(b)+L" identificado.\n\nSalve para aplicar à ação escolhida, ou cancele para manter o botão anterior.";
    EnableWindow(GetDlgItem(captureWin,A_CAPTURE_SAVE),TRUE);SetFocus(GetDlgItem(captureWin,A_CAPTURE_SAVE));InvalidateRect(captureWin,nullptr,FALSE);return;
   }
   return;

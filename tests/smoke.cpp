@@ -126,7 +126,7 @@ int runSelfTest() {
  ShowWindow(win,SW_MINIMIZE);show();
  check(IsWindowVisible(win)&&!IsIconic(win)&&IsZoomed(win),"restoring a minimized maximized window preserves maximization");
  ShowWindow(win,SW_SHOWNORMAL);
- openPage(Page::Settings);check(panel&&IsWindow(panel),"open dedicated settings window");
+ openPage(Page::Settings);check(panel&&IsWindow(panel),"open dedicated settings window");check(GetDlgItem(panel,A_PLAYER_PROFILE)!=nullptr&&GetDlgItem(panel,A_CALIBRATE)!=nullptr,"settings expose physical-device shortcut profiles and calibration controls");
  beginCapture(A_CAPTURE_OPEN);check(captureWin&&captureAction==A_CAPTURE_OPEN,"open action-specific controller popup");
  HANDLE fake=reinterpret_cast<HANDLE>(static_cast<INT_PTR>(123));
  controllerButtons(fake,{6},{});check(captureCandidate==0,"held input cannot bind before a release report");
