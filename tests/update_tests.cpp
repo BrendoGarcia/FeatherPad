@@ -4,10 +4,18 @@
 #include <iostream>
 #include <shellapi.h>
 #include <sstream>
+#include "fixtures/zip_fixture.h"
 int main(){
  // Run the real helper against a disposable installation, never the user's launcher.
  wchar_t self[32768]{};GetModuleFileNameW(nullptr,self,32768);
  std::filesystem::path selfPath(self);
+ int argumentCount=0;LPWSTR* arguments=CommandLineToArgvW(GetCommandLineW(),&argumentCount);
+ if(arguments&&argumentCount==3&&std::wstring(arguments[1])==L"--verify-package"){
+  auto stage=std::filesystem::temp_directory_path()/(L"FeatherPad-package-test-"+std::to_wstring(GetCurrentProcessId()));std::filesystem::create_directories(stage);
+  int result=0;try{auto files=updates::extractUpdateZip(arguments[2],stage.wstring());if(files.size()<7||updates::isOlderExecutable((stage/L"FeatherPad.exe").wstring(),(selfPath.parent_path()/L"FeatherPad.exe").wstring()))throw std::runtime_error("Pacote inválido.");std::cout<<"PASS real release ZIP extraction and executable version\n";}catch(const std::exception& e){std::cerr<<e.what();result=1;}
+  LocalFree(arguments);std::filesystem::remove_all(stage);return result;
+ }
+ if(arguments)LocalFree(arguments);
  if(selfPath.filename()==L"FeatherPad.exe"){
   int argc=0;LPWSTR* argv=CommandLineToArgvW(GetCommandLineW(),&argc);
   if(argc==3&&std::wstring(argv[1])==L"--fixture-parent"){
@@ -54,6 +62,19 @@ int main(){
  check(lock!=INVALID_HANDLE_VALUE,"create locked destination fixture");
  bool applied=applyFiles((root/L"locked").wstring(),(root/L"install").wstring(),{f,second});check(!applied&&hashFile((root/L"install"/L"LICENSE").wstring())!=f.hash,"rollback on locked destination");if(lock!=INVALID_HANDLE_VALUE)CloseHandle(lock);
 
+
+ auto fixture=root/L"fixture.zip";{std::ofstream out(fixture,std::ios::binary);out.write(reinterpret_cast<const char*>(zipFixture),sizeof(zipFixture));}
+ std::filesystem::create_directory(root/L"extracted");auto extracted=extractUpdateZip(fixture.wstring(),(root/L"extracted").wstring());
+ check(extracted.size()==7&&extracted[0].hash==f.hash,"deflated ZIP extraction checks CRC and hashes");
+ std::filesystem::create_directory(root/L"same-install");std::filesystem::create_directory(root/L"same-install"/L"licenses");
+ for(const auto& item:extracted)std::filesystem::copy_file(root/L"extracted"/item.name,root/L"same-install"/item.path);
+ check(changedFiles(extracted,(root/L"same-install").wstring()).empty(),"already updated means identical contents, not tag ordering");
+ write(root/L"same-install"/L"FeatherPad.exe","different");check(changedFiles(extracted,(root/L"same-install").wstring()).size()==1,"same internal version with changed executable remains detectable");
+ auto zipMetadata=parseJson("{\"draft\":false,\"prerelease\":false,\"tag_name\":\"1.0.1\",\"assets\":[{\"name\":\"FeatherPad-Windows-x64.zip\",\"digest\":\"sha256:"+std::string(64,'a')+"\",\"size\":123,\"browser_download_url\":\"https://github.com/BrendoGarcia/FeatherPad/releases/download/1.0.1/FeatherPad-Windows-x64.zip\"}]}");
+ check(releaseDistribution(zipMetadata).archive,"actual 1.0.1 ZIP-only release format is recognized despite internal 2.2 version");
+ auto corrupt=std::vector<unsigned char>(std::begin(zipFixture),std::end(zipFixture));corrupt[50]^=255;
+ {std::ofstream out(root/L"corrupt.zip",std::ios::binary);out.write(reinterpret_cast<const char*>(corrupt.data()),corrupt.size());}
+ bool rejected=false;try{extractUpdateZip((root/L"corrupt.zip").wstring(),(root/L"extracted").wstring());}catch(...){rejected=true;}check(rejected,"corrupt ZIP payload is rejected before installation");
  // Real Updater process: inherited handle survives parent exit; restart uses original path.
  auto e2e=root/L"e2e",install=e2e/L"install",stage=e2e/L"stage";
  std::filesystem::create_directories(install);std::filesystem::create_directory(stage);

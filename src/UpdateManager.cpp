@@ -8,7 +8,7 @@
 
 namespace {
  std::thread worker;std::atomic<bool> busy{false},stopping{false};
- struct Result {std::wstring error,stage,tag;bool available=false,downloaded=false;std::vector<updates::File> files;} result;
+ struct Result {std::wstring error,stage,tag;bool available=false,downloaded=false,archive=false;updates::File zip;std::vector<updates::File> files;} result;
  struct Http {HINTERNET h=nullptr;~Http(){if(h)WinHttpCloseHandle(h);}};
  bool allowedHost(const std::wstring& h){return h==L"api.github.com"||h==L"github.com"||h==L"release-assets.githubusercontent.com"||h==L"objects.githubusercontent.com";}
  void get(const std::wstring& url,std::string* text,const std::wstring& file,std::uint64_t limit){
@@ -37,17 +37,36 @@ namespace {
   if(busy.exchange(true))return;
   if(worker.joinable())worker.join();
   worker=std::thread([download]{try{
-   if(!download){result={};std::string body;get(L"https://api.github.com/repos/BrendoGarcia/FeatherPad/releases/latest",&body,L"",4*1024*1024);auto release=updates::parseJson(body);const auto tag=release.at("tag_name").string();result.tag=updates::wide(tag);result.available=updates::newerVersion(tag,updates::version);if(result.available)result.files=updates::releaseFiles(release);}
+   if(!download){
+    result={};std::string body;get(L"https://api.github.com/repos/BrendoGarcia/FeatherPad/releases/latest",&body,L"",4*1024*1024);
+    auto release=updates::parseJson(body);result.tag=updates::wide(release.at("tag_name").string());
+    auto distribution=updates::releaseDistribution(release);result.archive=distribution.archive;result.zip=distribution.zip;
+    result.files=distribution.files;result.available=result.archive||!updates::changedFiles(result.files,updates::executableDirectory()).empty();
+   }
    else {
     GUID id{};if(FAILED(CoCreateGuid(&id)))throw std::runtime_error("Não foi possível preparar atualização.");wchar_t guid[40]{};StringFromGUID2(id,guid,40);
     auto root=dataFolder+L"\\updates";CreateDirectoryW(root.c_str(),nullptr);result.stage=root+L"\\"+guid;if(!CreateDirectoryW(result.stage.c_str(),nullptr))throw std::runtime_error("Não foi possível criar a pasta temporária.");
     std::vector<updates::File> changed;auto install=updates::executableDirectory();
-    for(const auto& f:result.files){if(stopping)throw std::runtime_error("Atualização cancelada.");if(updates::verifyFile(install+L"\\"+f.path,f))continue;get(updates::wide(f.url),nullptr,result.stage+L"\\"+f.name,f.size);if(!updates::verifyFile(result.stage+L"\\"+f.name,f))throw std::runtime_error("SHA-256 ou tamanho inválido. A instalação foi preservada.");changed.push_back(f);}
-    if(changed.empty())throw std::runtime_error("Os arquivos desta release já estão instalados.");
+    if(result.archive){
+     const auto package=result.stage+L"\\package.zip";get(updates::wide(result.zip.url),nullptr,package,result.zip.size);
+     if(!updates::verifyFile(package,result.zip))throw std::runtime_error("SHA-256 do ZIP inválido. A instalação foi preservada.");
+     result.files=updates::extractUpdateZip(package,result.stage);
+    }
+    for(const auto& f:result.files){
+     if(stopping)throw std::runtime_error("Atualização cancelada.");
+     if(updates::verifyFile(install+L"\\"+f.path,f))continue;
+     if(!result.archive){get(updates::wide(f.url),nullptr,result.stage+L"\\"+f.name,f.size);if(!updates::verifyFile(result.stage+L"\\"+f.name,f))throw std::runtime_error("SHA-256 ou tamanho inválido. A instalação foi preservada.");}
+     changed.push_back(f);
+    }
+    if(changed.empty()){result.available=false;result.downloaded=false;}
+    else {
+    auto exe=std::find_if(changed.begin(),changed.end(),[](const updates::File& f){return f.name==L"FeatherPad.exe";});
+    if(exe!=changed.end()&&updates::isOlderExecutable(result.stage+L"\\FeatherPad.exe",install+L"\\FeatherPad.exe"))throw std::runtime_error("A release encontrada contém um executável anterior ao instalado. Não será feito downgrade. A tag pública e a versão interna são mostradas separadamente.");
     updates::writePlan(result.stage,changed);
     // Execute a copy of the CURRENT trusted helper, never the freshly downloaded helper.
     if(!CopyFileW((install+L"\\Updater.exe").c_str(),(result.stage+L"\\runner.exe").c_str(),TRUE))throw std::runtime_error("Updater.exe ausente. Extraia o pacote completo desta versão uma vez.");
     result.downloaded=true;
+    }
    }
   }catch(const std::exception& e){result.error=updates::wide(e.what());}catch(...){result.error=L"Falha inesperada ao atualizar.";}
   if(!stopping)PostMessageW(win,UPDATE_READY,0,0);
@@ -59,8 +78,9 @@ void handleUpdateResult(){
  if(worker.joinable())worker.join();
  busy=false;HWND owner=keyboardWindow?keyboardWindow:(captureWin?captureWin:(panel?panel:win));
  if(!result.error.empty()){status(result.error);MessageBoxW(owner,result.error.c_str(),L"Atualização não aplicada",MB_ICONWARNING);return;}
- if(!result.downloaded){if(!result.available){status(L"Você já está na versão estável mais recente.");MessageBoxW(owner,L"Nenhuma versão estável mais recente está disponível.",L"FeatherPad",MB_OK|MB_ICONINFORMATION);return;}
-  if(MessageBoxW(owner,(L"Versão "+result.tag+L" disponível. Baixar os arquivos alterados?\n\nOrigem: GitHub Releases oficial. Biblioteca, capas e configurações serão preservadas.").c_str(),L"Atualização disponível",MB_YESNO|MB_ICONQUESTION)!=IDYES)return;
+ if(!result.downloaded){if(!result.available){status(L"Arquivos conferidos com a release "+result.tag+L". Nenhuma alteração necessária.");MessageBoxW(owner,(L"Release "+result.tag+L": todos os arquivos verificados já correspondem à instalação.").c_str(),L"FeatherPad",MB_OK|MB_ICONINFORMATION);return;}
+  const auto question=result.archive?L"A release oferece um ZIP. Baixar e verificar seu conteúdo para comparar com os arquivos instalados?":L"Há arquivos diferentes na release. Baixar e verificar a atualização?";
+  if(MessageBoxW(owner,(L"Release publicada: "+result.tag+L"\nVersão interna instalada: "+updates::wide(updates::version)+L"\n\n"+question+L"\n\nBiblioteca, capas e configurações serão preservadas.").c_str(),L"Verificar conteúdo da release",MB_YESNO|MB_ICONQUESTION)!=IDYES)return;
   status(L"Baixando e verificando os arquivos alterados…");start(true);return;
  }
  if(MessageBoxW(owner,L"Download verificado. Fechar o launcher, aplicar a atualização e reiniciar agora?\n\nNão atualize durante uma partida: a conversão do controle será interrompida.",L"Instalar atualização",MB_YESNO|MB_ICONQUESTION|MB_DEFBUTTON2)!=IDYES)return;
