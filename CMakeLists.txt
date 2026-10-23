@@ -35,6 +35,7 @@ target_compile_definitions(FeatherPad PRIVATE UNICODE _UNICODE WINVER=0x0601 _WI
 target_link_libraries(FeatherPad PRIVATE ViGEmClient user32 gdi32 shell32 ole32 comdlg32 advapi32 hid windowscodecs uuid dwmapi setupapi cfgmgr32 psapi wlanapi iphlpapi winhttp bcrypt version fp_inflate)
 if(MSVC)
   target_compile_options(FeatherPad PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:/W4;/O1;/utf-8>")
+  target_link_options(FeatherPad PRIVATE /MANIFEST:NO) # Manifest is embedded by app.rc.
 else()
   target_compile_options(FeatherPad PRIVATE "$<$<COMPILE_LANGUAGE:CXX>:-Wall;-Wextra;-Os>")
   target_link_options(FeatherPad PRIVATE -municode -static -static-libgcc -static-libstdc++ -s)

@@ -9,7 +9,7 @@ RECT logicalClient(HWND owner);
 double uiScale(HWND owner);
 int beginLogicalPaint(HWND owner,HDC dc);
 HWND createFittedWindow(const wchar_t* className,const wchar_t* title,int width,int height,HWND owner,DWORD style=WS_CAPTION|WS_SYSMENU,DWORD exStyle=WS_EX_DLGMODALFRAME);
-void registerLogicalChild(HWND owner,HWND child,RECT rectangle);
+void registerLogicalChild(HWND owner,HWND child,RECT rectangle,int fontHeight=15);
 void forgetWindowLayout(HWND owner);
 bool handleLayoutMessage(HWND owner,UINT message,LPARAM parameter);
 extern int windowPreset;

@@ -90,8 +90,8 @@ void openVirtualKeyboard(HWND target){
  keyFont=font(width>=1000?38:28,FW_NORMAL);textFont=font(width>=1000?18:14,FW_NORMAL);titleFont=font(24,FW_SEMIBOLD);
  RECT area=logicalClient(keyboardWindow);const int cw=area.right,ch=area.bottom;
  keyboardEdit=CreateWindowExW(WS_EX_CLIENTEDGE,L"EDIT",(target?textOf(target):searchQuery).c_str(),WS_CHILD|WS_VISIBLE|WS_TABSTOP|ES_AUTOHSCROLL,28,70,cw-56,48,keyboardWindow,reinterpret_cast<HMENU>(690),instance,nullptr);
- registerLogicalChild(keyboardWindow,keyboardEdit,RECT{28,70,cw-28,118});
- SendMessageW(keyboardEdit,WM_SETFONT,reinterpret_cast<WPARAM>(titleFont),TRUE);SendMessageW(keyboardEdit,EM_SETLIMITTEXT,target?SendMessageW(target,EM_GETLIMITTEXT,0,0):160,0);SendMessageW(keyboardEdit,EM_SETSEL,static_cast<WPARAM>(-1),-1);
+ registerLogicalChild(keyboardWindow,keyboardEdit,RECT{28,70,cw-28,118},24);
+ SendMessageW(keyboardEdit,EM_SETLIMITTEXT,target?SendMessageW(target,EM_GETLIMITTEXT,0,0):160,0);SendMessageW(keyboardEdit,EM_SETSEL,static_cast<WPARAM>(-1),-1);
  auto add=[&](int code,const std::wstring& label,int x,int y,int w,int h){HWND key=CreateWindowExW(0,L"BUTTON",label.c_str(),WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,x,y,w,h,keyboardWindow,reinterpret_cast<HMENU>(static_cast<INT_PTR>(700+code)),instance,nullptr);registerLogicalChild(keyboardWindow,key,RECT{x,y,x+w,y+h});SendMessageW(key,WM_SETFONT,reinterpret_cast<WPARAM>(keyFont),TRUE);SetPropW(key,L"KeyOriginal",reinterpret_cast<HANDLE>(SetWindowLongPtrW(key,GWLP_WNDPROC,reinterpret_cast<LONG_PTR>(keyProc))));};
  add(65,L"Fechar ×",cw-164,16,136,40);add(66,L"← cursor",28,130,104,36);add(67,L"cursor →",140,130,104,36);add(69,L"Fim",252,130,88,36);add(63,L"Limpar",348,130,104,36);
  const double unit=(cw-56)/10.0;const int top=186,step=(ch-top-42)/4;

@@ -9,9 +9,9 @@
 #include "Internal.h"
 
 RumbleChannel::~RumbleChannel(){stop();}
-void RumbleChannel::publish(std::uint8_t large,std::uint8_t small){
+void RumbleChannel::publish(std::uint8_t largeMotor,std::uint8_t smallMotor){
  std::lock_guard<std::mutex> guard(mailbox);if(!enabled)return;
- command=((command+0x100000000ULL)&0xffffffff00000000ULL)|large|(static_cast<std::uint64_t>(small)<<8);
+ command=((command+0x100000000ULL)&0xffffffff00000000ULL)|largeMotor|(static_cast<std::uint64_t>(smallMotor)<<8);
 }
 RumbleChannel::Output RumbleChannel::consume(bool allow,ULONGLONG now){
  std::lock_guard<std::mutex> guard(mailbox);Output out;
@@ -44,6 +44,7 @@ bool RumbleChannel::start(void* driver,void* device,bool sony){
    if(!good)break; // Disconnect/error must not spin.
    if(sony)publish(ds4.Report.LargeMotor,ds4.Report.SmallMotor);else publish(xbox.LargeMotor,xbox.SmallMotor);
   }
+  publish(0,0); // A broken output stream must not leave motors running.
   CloseHandle(done);
  });}catch(...){CloseHandle(cancel);cancel=nullptr;return false;}
  return true;

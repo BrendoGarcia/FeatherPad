@@ -120,7 +120,7 @@ namespace {
   if(g.name.empty()||g.path.empty()){MessageBoxW(panel,L"Preencha o nome e escolha o executável ou atalho do jogo.",L"Faltam informações",MB_ICONINFORMATION);return;}
   for(const auto* s:{&g.name,&g.path,&g.args,&g.dir,&g.note,&g.cover,&g.categories})if(!validField(*s)){MessageBoxW(panel,L"Os campos não podem conter quebras de linha nem ultrapassar 8000 caracteres.",L"Confira os campos",MB_ICONWARNING);return;}
   if(g.path.front()==L'"'||g.path.back()==L'"'){MessageBoxW(panel,L"Informe o caminho do jogo sem aspas externas. Use aspas somente nos argumentos, se necessário.",L"Confira o caminho",MB_ICONWARNING);return;}
-  if(!g.cover.empty()&&((editorIndex<0)||g.cover!=games[editorIndex].cover))if(!importArt(g.cover,panel,hasCoverCrop?&editingCrop:nullptr))return;
+  if(!g.cover.empty()&&(hasCoverCrop||(editorIndex<0)||g.cover!=games[editorIndex].cover))if(!importArt(g.cover,panel,hasCoverCrop?&editingCrop:nullptr))return;
   const auto backup=games;int index=editorIndex;
   if(index<0){if(games.size()>=2000){MessageBoxW(panel,L"Limite de 2000 jogos atingido.",L"FeatherPad",MB_ICONWARNING);return;}games.push_back(g);index=static_cast<int>(games.size())-1;}
   else games[index]=g;

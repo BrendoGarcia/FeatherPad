@@ -5,8 +5,8 @@
 
 int windowPreset=0;
 namespace {
- struct Child {HWND window;RECT rect;};
- struct Layout {int width=0,height=0;double scale=1;HFONT font=nullptr;std::vector<Child> children;};
+ struct Child {HWND window;RECT rect;int fontHeight=15;};
+ struct Layout {int width=0,height=0;double scale=1;std::map<int,HFONT> fonts;std::vector<Child> children;};
  std::map<HWND,Layout> layouts;
  template<class T>T userApi(const char* name){auto p=GetProcAddress(GetModuleHandleW(L"user32.dll"),name);T result=nullptr;static_assert(sizeof(result)==sizeof(p),"Win32 ABI");memcpy(&result,&p,sizeof(p));return result;}
  int scaled(int value,double scale){return static_cast<int>(std::lround(value*scale));}
@@ -14,13 +14,14 @@ namespace {
   using Adjust=BOOL(WINAPI*)(LPRECT,DWORD,BOOL,DWORD,UINT);auto adjust=userApi<Adjust>("AdjustWindowRectExForDpi");
   if(adjust)adjust(&rect,style,FALSE,exStyle,dpi);else AdjustWindowRectEx(&rect,style,FALSE,exStyle);
  }
+ HFONT childFont(Layout& layout,int height){auto it=layout.fonts.find(height);if(it!=layout.fonts.end())return it->second;HFONT font=CreateFontW(-std::max(10,scaled(height,layout.scale)),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");layout.fonts[height]=font;return font;}
  void update(HWND owner){
   auto it=layouts.find(owner);if(it==layouts.end())return;auto& layout=it->second;
   RECT physical{};GetClientRect(owner,&physical);layout.scale=std::min(physical.right/static_cast<double>(layout.width),physical.bottom/static_cast<double>(layout.height));
   if(layout.scale<=0)return;
-  auto old=layout.font;layout.font=CreateFontW(-std::max(10,scaled(15,layout.scale)),0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");
-  for(const auto& child:layout.children)if(IsWindow(child.window)){const auto& r=child.rect;SetWindowPos(child.window,nullptr,scaled(r.left,layout.scale),scaled(r.top,layout.scale),scaled(r.right-r.left,layout.scale),scaled(r.bottom-r.top,layout.scale),SWP_NOZORDER|SWP_NOACTIVATE);SendMessageW(child.window,WM_SETFONT,reinterpret_cast<WPARAM>(layout.font),TRUE);}
-  if(old)DeleteObject(old);
+  auto old=std::move(layout.fonts);layout.fonts.clear();
+  for(const auto& child:layout.children)if(IsWindow(child.window)){const auto& r=child.rect;SetWindowPos(child.window,nullptr,scaled(r.left,layout.scale),scaled(r.top,layout.scale),scaled(r.right-r.left,layout.scale),scaled(r.bottom-r.top,layout.scale),SWP_NOZORDER|SWP_NOACTIVATE);SendMessageW(child.window,WM_SETFONT,reinterpret_cast<WPARAM>(childFont(layout,child.fontHeight)),TRUE);}
+  for(const auto& font:old)if(font.second)DeleteObject(font.second);
   RedrawWindow(owner,nullptr,nullptr,RDW_INVALIDATE|RDW_ALLCHILDREN);
  }
 }
@@ -45,8 +46,8 @@ HWND createFittedWindow(const wchar_t* className,const wchar_t* title,int width,
  HWND result=CreateWindowExW(exStyle,className,title,style|WS_CLIPCHILDREN,x,y,w,h,owner,nullptr,instance,nullptr);
  if(result){auto& layout=layouts[result];layout.width=width;layout.height=height;layout.scale=scale;update(result);darkTitle(result);}return result;
 }
-void registerLogicalChild(HWND owner,HWND child,RECT rect){auto it=layouts.find(owner);if(it==layouts.end()||!child)return;auto& layout=it->second;layout.children.push_back({child,rect});const double s=layout.scale;SetWindowPos(child,nullptr,scaled(rect.left,s),scaled(rect.top,s),scaled(rect.right-rect.left,s),scaled(rect.bottom-rect.top,s),SWP_NOZORDER|SWP_NOACTIVATE);SendMessageW(child,WM_SETFONT,reinterpret_cast<WPARAM>(layout.font),TRUE);}
-void forgetWindowLayout(HWND owner){auto it=layouts.find(owner);if(it!=layouts.end()){if(it->second.font)DeleteObject(it->second.font);layouts.erase(it);}}
+void registerLogicalChild(HWND owner,HWND child,RECT rect,int fontHeight){auto it=layouts.find(owner);if(it==layouts.end()||!child)return;auto& layout=it->second;layout.children.push_back({child,rect,fontHeight});const double s=layout.scale;SetWindowPos(child,nullptr,scaled(rect.left,s),scaled(rect.top,s),scaled(rect.right-rect.left,s),scaled(rect.bottom-rect.top,s),SWP_NOZORDER|SWP_NOACTIVATE);SendMessageW(child,WM_SETFONT,reinterpret_cast<WPARAM>(childFont(layout,fontHeight)),TRUE);}
+void forgetWindowLayout(HWND owner){auto it=layouts.find(owner);if(it!=layouts.end()){for(const auto& font:it->second.fonts)if(font.second)DeleteObject(font.second);layouts.erase(it);}}
 bool handleLayoutMessage(HWND owner,UINT message,LPARAM parameter){
  if(message==WM_NCDESTROY){forgetWindowLayout(owner);return false;}
  if(message==WM_SIZE){update(owner);return false;}

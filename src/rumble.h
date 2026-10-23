@@ -13,7 +13,7 @@ public:
  ~RumbleChannel();
  bool start(void* driver,void* target,bool playStation);
  void stop();
- void publish(std::uint8_t large,std::uint8_t small);
+ void publish(std::uint8_t largeMotor,std::uint8_t smallMotor);
  Output consume(bool allow,ULONGLONG now);
 private:
  std::mutex mailbox;std::uint64_t command=0;bool enabled=false;
