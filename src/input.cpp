@@ -29,7 +29,7 @@ namespace {
   if(!d->uiArmed){if(now.empty())d->uiArmed=true;else return;}
   useControllerProfile(d->path);controllerButtons(handle,now,previous);
   const HWND foreground=GetForegroundWindow();
-  if(captureWin||!IsWindowVisible(win)||IsIconic(win)||(foreground!=win&&foreground!=panel&&foreground!=keyboardWindow)) {d->direction=0;return;}
+  if(captureWin||!IsWindowVisible(win)||IsIconic(win)||(foreground!=win&&foreground!=panel&&foreground!=keyboardWindow&&foreground!=coverPreviewWindow)) {d->direction=0;return;}
   if(panel&&page==Page::Diagnostic){d->direction=0;return;}
   int hatDirection=0,xDirection=0,yDirection=0;
   for(const auto& v:d->values) {

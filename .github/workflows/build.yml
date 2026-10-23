@@ -38,5 +38,6 @@ jobs:
           path: |
             build/keyboard-preview.bmp
             build/*-115.bmp
+            build/*-120.bmp
             build/self-test.log
             build/Testing/Temporary/LastTest.log

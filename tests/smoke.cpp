@@ -81,9 +81,9 @@ int runSelfTest() {
  auto image=dataFolder+L"\\test.bmp";check(writeBytes(image,bmp.data(),static_cast<DWORD>(bmp.size()))&&validateArt(image),"decode a real BMP with WIC");
  auto imported=image;check(importArt(imported,win)&&imported!=image,"copy artwork into managed profile folder");
  const DWORD before=GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS);
- for(int i=0;i<12;++i){auto copy=dataFolder+L"\\cover"+std::to_wstring(i)+L".bmp";CopyFileW(image.c_str(),copy.c_str(),FALSE);artFor(copy);}
+ for(int i=0;i<32;++i){auto copy=dataFolder+L"\\cover"+std::to_wstring(i)+L".bmp";CopyFileW(image.c_str(),copy.c_str(),FALSE);artFor(copy);}
  const DWORD cached=GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS);
- check(cached<=before+6,"thumbnail cache has a six-bitmap bound");clearArt();
+ check(cached<=before+20,"thumbnail cache has a twenty-bitmap bound for grid working set");clearArt();
  check(GetGuiResources(GetCurrentProcess(),GR_GDIOBJECTS)<=before,"clearing artwork releases GDI bitmaps");
  games[0].cover=imported;games[0].favorite=true;games[0].name=L"Minha aventura";rebuildLibrary(0);
  HDC screen=GetDC(win),memory=CreateCompatibleDC(screen);HBITMAP bitmap=CreateCompatibleBitmap(screen,1180,780);auto old=SelectObject(memory,bitmap);
@@ -145,7 +145,7 @@ int runSelfTest() {
  openPage(Page::Diagnostic);controllerButtons(fake,{7},{});
  check(textOf(GetDlgItem(panel,420)).find(L"7")!=std::wstring::npos,"diagnostic shows inputs without rebinding");closePanel();
  openPage(Page::Compatibility);check(GetDlgItem(panel,A_COMPAT_TOGGLE)!=nullptr&&GetDlgItem(panel,A_COMPAT_DEFAULT)!=nullptr,"controller compatibility panel exposes activation and default format");closePanel();
- failed+=controllerStateSelfTest(log);failed+=bridgeSelfTest(log);failed+=regressions115(log);
+ failed+=controllerStateSelfTest(log);failed+=bridgeSelfTest(log);failed+=regressions115(log);failed+=displayFeaturesTest(log);
  clearArt();cleanup(dataFolder);log+="\nFailures: "+std::to_string(failed)+"\n";
  writeBytes(L"self-test.log",log.data(),static_cast<DWORD>(log.size()));return failed?1:0;
 }

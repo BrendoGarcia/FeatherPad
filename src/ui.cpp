@@ -10,6 +10,7 @@ namespace {
  std::array<HWND,7> fields{};
  HWND profileField=nullptr,profilePathField=nullptr;
  bool favoriteDraft=false;
+ HWND windowPresetCombo=nullptr;
  HWND gameModeCombo=nullptr,defaultModeCombo=nullptr,sourceCombo=nullptr;
  HWND collectionNameField=nullptr;
  std::wstring editingCollection;
@@ -21,8 +22,9 @@ namespace {
  std::vector<std::wstring> sourceGuids;
  int hovered=-1;
  std::wstring editingCover;
+ CoverCrop editingCrop;bool hasCoverCrop=false;
  std::wstring captureProfileKey;
- int px(int x) {return x;} // Logical canvas: Windows scales it on high-DPI screens.
+ int px(int x) {return x;} // Authored coordinates stay in logical units.
  RECT box(int x,int y,int w,int h){return RECT{px(x),px(y),px(x+w),px(y+h)};}
  void fill(HDC dc,RECT r,COLORREF color) {
   SetDCBrushColor(dc,color);FillRect(dc,&r,static_cast<HBRUSH>(GetStockObject(DC_BRUSH)));
@@ -69,6 +71,7 @@ namespace {
   else {
    const COLORREF colors[]={RGB(36,73,91),RGB(69,51,95),RGB(78,67,42),RGB(36,77,66),RGB(71,45,63)};
    round(dc,r,colors[static_cast<size_t>(std::max(index,0))%5]);
+   if(r.right-r.left<80||r.bottom-r.top<180){label(dc,g.name.substr(0,1),r,r.right-r.left>=100?heroFont:mediumFont,white,DT_CENTER|DT_VCENTER|DT_SINGLELINE);return;}
    // A typographic fallback keeps the library useful before covers are imported.
    const int w=r.right-r.left,h=r.bottom-r.top;
    lineAt(dc,r.left+18,r.top+22,w-36,RGB(112,137,154));
@@ -79,7 +82,7 @@ namespace {
  }
  HWND control(HWND owner,const wchar_t* type,const std::wstring& text,DWORD style,RECT r,int id) {
   HWND c=CreateWindowExW(0,type,text.c_str(),WS_CHILD|WS_VISIBLE|style,r.left,r.top,r.right-r.left,r.bottom-r.top,owner,reinterpret_cast<HMENU>(static_cast<INT_PTR>(id)),instance,nullptr);
-  SendMessageW(c,WM_SETFONT,reinterpret_cast<WPARAM>(bodyFont),TRUE);return c;
+  SendMessageW(c,WM_SETFONT,reinterpret_cast<WPARAM>(bodyFont),TRUE);registerLogicalChild(owner,c,r);return c;
  }
  HWND edit(HWND owner,const std::wstring& value,RECT r,int id,int limit=8000) {
   HWND h=control(owner,L"EDIT",value,WS_TABSTOP|WS_BORDER|ES_AUTOHSCROLL,r,id);
@@ -92,14 +95,7 @@ namespace {
   control(owner,L"STATIC",value,0,r,0);
  }
  HWND ownedWindow(const wchar_t* className,const wchar_t* title,int width,int height,HWND owner) {
-  RECT r{};GetWindowRect(owner,&r);RECT area{0,0,width,height};
-  AdjustWindowRectEx(&area,WS_CAPTION|WS_SYSMENU,FALSE,WS_EX_DLGMODALFRAME);
-  RECT desktop{};SystemParametersInfoW(SPI_GETWORKAREA,0,&desktop,0);
-  const int w=area.right-area.left,h=area.bottom-area.top;
-  const int x=std::max(static_cast<int>(desktop.left),std::min(static_cast<int>(desktop.right)-w,static_cast<int>(r.left+(r.right-r.left-w)/2)));
-  const int y=std::max(static_cast<int>(desktop.top),std::min(static_cast<int>(desktop.bottom)-h,static_cast<int>(r.top+(r.bottom-r.top-h)/2)));
-  HWND hwin=CreateWindowExW(WS_EX_DLGMODALFRAME,className,title,WS_CAPTION|WS_SYSMENU|WS_CLIPCHILDREN,x,y,w,h,owner,nullptr,instance,nullptr);
-  darkTitle(hwin);return hwin;
+  return createFittedWindow(className,title,width,height,owner);
  }
  bool chooseImage(HWND owner,std::wstring& result) {
   wchar_t path[32768]{};OPENFILENAMEW of{};of.lStructSize=sizeof(of);of.hwndOwner=owner;of.lpstrFile=path;of.nMaxFile=32768;
@@ -124,7 +120,7 @@ namespace {
   if(g.name.empty()||g.path.empty()){MessageBoxW(panel,L"Preencha o nome e escolha o executável ou atalho do jogo.",L"Faltam informações",MB_ICONINFORMATION);return;}
   for(const auto* s:{&g.name,&g.path,&g.args,&g.dir,&g.note,&g.cover,&g.categories})if(!validField(*s)){MessageBoxW(panel,L"Os campos não podem conter quebras de linha nem ultrapassar 8000 caracteres.",L"Confira os campos",MB_ICONWARNING);return;}
   if(g.path.front()==L'"'||g.path.back()==L'"'){MessageBoxW(panel,L"Informe o caminho do jogo sem aspas externas. Use aspas somente nos argumentos, se necessário.",L"Confira o caminho",MB_ICONWARNING);return;}
-  if(!g.cover.empty()&&((editorIndex<0)||g.cover!=games[editorIndex].cover))if(!importArt(g.cover,panel))return;
+  if(!g.cover.empty()&&(hasCoverCrop||(editorIndex<0)||g.cover!=games[editorIndex].cover))if(!importArt(g.cover,panel,hasCoverCrop?&editingCrop:nullptr))return;
   const auto backup=games;int index=editorIndex;
   if(index<0){if(games.size()>=2000){MessageBoxW(panel,L"Limite de 2000 jogos atingido.",L"FeatherPad",MB_ICONWARNING);return;}games.push_back(g);index=static_cast<int>(games.size())-1;}
   else games[index]=g;
@@ -132,7 +128,7 @@ namespace {
   closePanel();rebuildLibrary(index);status(L"Jogo salvo na sua biblioteca.");
  }
  void paintCapture(HDC dc) {
-  RECT client{};GetClientRect(captureWin,&client);fill(dc,client,bg);
+  RECT client{};client=logicalClient(captureWin);fill(dc,client,bg);
   round(dc,box(28,26,54,54),surface);
   label(dc,captureCandidate?L"✓":L"…",box(28,26,54,54),titleFont,accent,DT_CENTER|DT_VCENTER|DT_SINGLELINE);
   std::wstring title;
@@ -209,7 +205,7 @@ void paintMain(HDC dc,RECT client) {
  button(dc,fullscreen?L"Sair da tela cheia":L"Tela cheia / TV",box(18,395,172,43),A_FULLSCREEN);
  button(dc,L"Coleções",box(18,450,172,36),A_COLLECTIONS,collectionsHome||!collectionFilter.empty());
  if(!searchQuery.empty())button(dc,L"Limpar pesquisa",box(18,495,172,36),A_CLEAR_SEARCH);
- label(dc,L"SEM PRESSA. SÓ JOGUE.",box(27,h-200,166,22),smallFont,muted);
+
  button(dc,L"Configurações",box(18,h-158,172,43),A_SETTINGS);
  lineAt(dc,18,h-99,172);
  RECT avatar=box(25,h-77,42,42);round(dc,avatar,surface);
@@ -243,6 +239,45 @@ void paintMain(HDC dc,RECT client) {
   label(dc,L"Abra uma coleção para jogar. Atribua um jogo a uma ou mais coleções no editor, ou deixe sem coleção.",box(x,h-67,cw,45),smallFont,muted,DT_WORDBREAK);
   return;
  }
+ auto viewButtons=[&](int y){
+  button(dc,L"Carrossel",box(x+214,y,90,30),A_VIEW_CAROUSEL,libraryView==LibraryView::Carousel);
+  button(dc,L"Grade",box(x+312,y,70,30),A_VIEW_GRID,libraryView==LibraryView::Grid);
+  button(dc,L"Lista",box(x+390,y,70,30),A_VIEW_LIST,libraryView==LibraryView::List);
+ };
+ if(libraryView!=LibraryView::Carousel){
+  round(dc,box(x,130,cw,118),surface,line,16);
+  if(selection>=0&&selection<static_cast<int>(games.size())){const auto& game=games[selection];
+   label(dc,game.name,box(x+18,140,cw-112,38),titleFont);
+   button(dc,L"▶ Jogar",box(x+18,196,112,34),A_PLAY,true);
+   button(dc,game.favorite?L"★ Favorito":L"☆ Favoritar",box(x+142,196,120,34),A_STAR);
+   button(dc,L"Editar",box(x+274,196,78,34),A_EDIT);button(dc,L"Detalhes",box(x+364,196,94,34),A_GAME_DETAILS);
+   cover(dc,game,box(w-106,140,54,96),selection);
+  }else {label(dc,L"Nenhum jogo encontrado",box(x+18,144,cw-36,34),titleFont);button(dc,L"+ Adicionar jogo",box(x+18,196,180,34),A_ADD,true);}
+  label(dc,std::to_wstring(visibleGames.size())+L" jogos",box(x,262,200,30),titleFont);viewButtons(262);
+  button(dc,L"‹",box(w-116,262,36,30),A_PREV);button(dc,L"›",box(w-70,262,36,30),A_NEXT);
+  const int top=314,available=std::max(130,h-top-76);
+  libraryColumns=libraryView==LibraryView::List?1:std::clamp((cw+16)/150,3,6);
+  const int rows=libraryView==LibraryView::List?std::max(1,available/58):std::clamp(available/148,1,3);
+  const int capacity=libraryColumns*rows,cardW=(cw-(libraryColumns-1)*16)/libraryColumns,cellH=libraryView==LibraryView::List?58:available/rows;
+  const auto selected=std::find(visibleGames.begin(),visibleGames.end(),selection);const int pos=selected==visibleGames.end()?0:static_cast<int>(selected-visibleGames.begin());
+  // Scroll by rows, keeping the selected tile visible without changing its column.
+  firstVisible=std::max(0,(firstVisible/libraryColumns)*libraryColumns);
+  if(pos<firstVisible)firstVisible=(pos/libraryColumns)*libraryColumns;
+  if(pos>=firstVisible+capacity)firstVisible=(pos/libraryColumns-rows+1)*libraryColumns;
+  firstVisible=std::clamp(firstVisible,0,std::max(0,((static_cast<int>(visibleGames.size())-1)/libraryColumns-rows+1)*libraryColumns));
+  for(int j=0;j<capacity&&firstVisible+j<static_cast<int>(visibleGames.size());++j){const int index=visibleGames[firstVisible+j];const auto& game=games[index];const int left=x+(j%libraryColumns)*(cardW+16),y=top+(j/libraryColumns)*cellH;
+   RECT hit=box(left,y,cardW,cellH-10);
+   if(libraryView==LibraryView::List){round(dc,hit,index==selection?RGB(37,65,72):surface);cover(dc,game,box(left+6,y+4,30,40),index);
+    label(dc,(game.favorite?L"★  ":L"")+game.name,box(left+52,y,cardW-242,cellH-10),mediumFont,index==selection?accent:white);
+    label(dc,std::to_wstring(game.launches)+L" aberturas",box(left+cardW-180,y,168,cellH-10),smallFont,muted,DT_RIGHT|DT_SINGLELINE|DT_VCENTER);
+   }else {cover(dc,game,box(left,y,cardW,cellH-42),index);label(dc,(game.favorite?L"★ ":L"")+game.name,box(left,y+cellH-36,cardW,24),mediumFont,index==selection?accent:white);}
+   if(keyboardFocus==static_cast<int>(hits.size())||(keyboardFocus<0&&index==selection))focusRing(dc,hit);
+   hits.push_back({hit,0,index});
+  }
+  label(dc,L"Direcional: navegar  ·  ↑ no início: ações  ·  Confirmar: jogar  ·  V: mudar visualização",box(x,h-57,cw,24),smallFont,muted);
+  label(dc,notice,box(x,h-29,cw,20),smallFont,muted);return;
+ }
+ libraryColumns=1;
  const int heroY=130,heroH=230;
  RECT hero=box(x,heroY,cw,heroH);round(dc,hero,surface,line,18);
  if(selection>=0&&selection<static_cast<int>(games.size())) {
@@ -262,8 +297,8 @@ void paintMain(HDC dc,RECT client) {
   button(dc,favoritesOnly?L"Ver biblioteca":L"+ Adicionar jogo",box(x+28,heroY+173,180,38),favoritesOnly?A_ALL:A_ADD,true);
  }
  const int rowTitle=386,rowY=434;
- label(dc,!collectionFilter.empty()?L"Jogos desta coleção":favoritesOnly?L"Seus favoritos":L"Todos os jogos",box(x,rowTitle,320,30),titleFont);
- label(dc,std::to_wstring(visibleGames.size())+L" na coleção",box(x+330,rowTitle,cw-440,30),smallFont,muted);
+ label(dc,!collectionFilter.empty()?L"Jogos desta coleção":favoritesOnly?L"Seus favoritos":L"Todos os jogos",box(x,rowTitle,204,30),titleFont);
+ viewButtons(rowTitle);
  button(dc,L"‹",box(w-116,rowTitle,36,30),A_PREV);button(dc,L"›",box(w-70,rowTitle,36,30),A_NEXT);
  const int columns=std::max(3,std::min(5,(cw+16)/160));
  const int cardW=(cw-(columns-1)*16)/columns;
@@ -288,7 +323,11 @@ void paintMain(HDC dc,RECT client) {
  label(dc,L"← →  Jogos     ↑ ↓  Ações     Enter  Confirmar     F  Favoritar     S  Configurações     Esc  Ocultar",box(x,h-47,cw,22),smallFont,muted);
  label(dc,notice.empty()?L"Seu launcher pessoal. Sem distrações.":notice,box(x,h-23,cw,18),smallFont,muted);
 }
-void drawButton(const DRAWITEMSTRUCT* item) {
+void drawButton(const DRAWITEMSTRUCT* source) {
+ DRAWITEMSTRUCT copy=*source;const int saved=beginLogicalPaint(GetParent(copy.hwndItem),copy.hDC);
+ const double scale=uiScale(GetParent(copy.hwndItem));copy.rcItem.right=static_cast<LONG>(copy.rcItem.right/scale);copy.rcItem.bottom=static_cast<LONG>(copy.rcItem.bottom/scale);
+ struct Restore {HDC dc;int saved;~Restore(){RestoreDC(dc,saved);}} restore{copy.hDC,saved};const auto* item=&copy;
+ fill(item->hDC,item->rcItem,bg);
  const bool toggle=item->CtlID==A_STARTUP||item->CtlID==A_AUTOOPEN||item->CtlID==A_DRAFT_FAVORITE||item->CtlID==A_COMPAT_TOGGLE;
  if(toggle) {
   const bool checked=item->CtlID==A_STARTUP?startupEnabled():item->CtlID==A_AUTOOPEN?autoOpen:item->CtlID==A_COMPAT_TOGGLE?controllerCompatibility:favoriteDraft;
@@ -303,7 +342,7 @@ void drawButton(const DRAWITEMSTRUCT* item) {
   return;
  }
 
- const bool primary=item->CtlID==A_PLAY||item->CtlID==A_SAVE_GAME||item->CtlID==A_SAVE_PROFILE||item->CtlID==A_CAPTURE_SAVE;
+ const bool primary=item->CtlID==A_PLAY||item->CtlID==A_SAVE_GAME||item->CtlID==A_SAVE_PROFILE||item->CtlID==A_CAPTURE_SAVE||item->CtlID==COVER_IMPORT;
  const bool disabled=(item->itemState&ODS_DISABLED)!=0;
  const bool pressed=(item->itemState&ODS_SELECTED)!=0;
  round(item->hDC,item->rcItem,disabled?surface:(primary?accent:(pressed?line:RGB(34,48,65))),CLR_INVALID,10);
@@ -313,8 +352,8 @@ void drawButton(const DRAWITEMSTRUCT* item) {
 }
 void openPage(Page requested,int gameIndex) {
  if(panel){SetForegroundWindow(captureWin?captureWin:panel);return;}
- show();page=requested;editorIndex=gameIndex;std::fill(std::begin(fields),std::end(fields),nullptr);
- const wchar_t* title=requested==Page::Editor?(gameIndex<0?L"Adicionar jogo":L"Editar jogo"):requested==Page::Profile?L"Seu perfil":requested==Page::Diagnostic?L"Controles e jogadores":requested==Page::Compatibility?L"Compatibilidade dos jogos":requested==Page::Collections?L"Gerenciar coleção":requested==Page::Statistics?L"Estatísticas do jogo":requested==Page::Controls?L"Controles e atalhos":requested==Page::Players?L"Jogadores locais":requested==Page::General?L"Aplicativo":requested==Page::Metrics?L"Memória e rede":L"Configurações";
+ show();hasCoverCrop=false;page=requested;editorIndex=gameIndex;std::fill(std::begin(fields),std::end(fields),nullptr);
+ const wchar_t* title=requested==Page::Editor?(gameIndex<0?L"Adicionar jogo":L"Editar jogo"):requested==Page::Profile?L"Seu perfil":requested==Page::Diagnostic?L"Controles e jogadores":requested==Page::Compatibility?L"Compatibilidade dos jogos":requested==Page::Collections?L"Gerenciar coleção":requested==Page::Statistics?L"Estatísticas do jogo":requested==Page::Controls?L"Controles e atalhos":requested==Page::Players?L"Jogadores locais":requested==Page::General?L"Aplicativo":requested==Page::Metrics?L"Memória e rede":requested==Page::Display?L"Tela e visualização":L"Configurações";
  const int height=requested==Page::Editor?690:requested==Page::Profile?340:requested==Page::Diagnostic?380:requested==Page::Compatibility?580:requested==Page::Collections?340:600;
  panel=ownedWindow(L"FeatherPadPanel",title,requested==Page::Editor?760:650,height,win);if(!panel){page=Page::None;return;}
  EnableWindow(win,FALSE);
@@ -351,7 +390,7 @@ void openPage(Page requested,int gameIndex) {
  } else if(requested==Page::Statistics) {
   staticText(panel,L"ESTATÍSTICAS DO JOGO",box(26,24,598,28));
   staticText(panel,gameStatistics(static_cast<size_t>(std::max(0,gameIndex))),box(26,68,598,280));
-  nativeButton(panel,L"Concluir",box(486,590,138,34),A_CLOSE_PANEL);
+  nativeButton(panel,L"Concluir",box(486,546,138,34),A_CLOSE_PANEL);
  } else if(requested==Page::Settings) {
   staticText(panel,L"CONFIGURAÇÕES",box(26,24,598,28));
   staticText(panel,L"Escolha o que deseja ajustar.",box(26,64,598,28));
@@ -360,6 +399,7 @@ void openPage(Page requested,int gameIndex) {
   nativeButton(panel,L"Compatibilidade dos jogos",box(26,244,598,48),A_COMPAT);
   nativeButton(panel,L"Aplicativo, inicialização e atualizações",box(26,306,598,48),A_GENERAL);
   nativeButton(panel,L"Memória e rede — leituras do Windows",box(26,368,598,48),A_METRICS);
+  nativeButton(panel,L"Tela, tamanho e visualização",box(26,430,598,48),A_DISPLAY);
   nativeButton(panel,L"Concluir",box(486,546,138,34),A_CLOSE_PANEL);
  } else if(requested==Page::Controls) {
   profileKeys.clear();profileLabels.clear();
@@ -395,6 +435,16 @@ void openPage(Page requested,int gameIndex) {
   staticText(panel,L"Durante um jogo, novas conexões de controle não reabrem a biblioteca. Use o botão do controle ou o ícone na bandeja para voltar.",box(26,238,598,62));
   nativeButton(panel,L"Buscar atualizações",box(26,340,286,42),A_UPDATES);nativeButton(panel,L"Tela cheia / TV (F11)",box(326,340,298,42),A_FULLSCREEN);
   control(panel,L"STATIC",L"Fechar a janela mantém o monitor ativo na bandeja do Windows.",0,box(26,418,598,64),451);
+  nativeButton(panel,L"Voltar às configurações",box(26,546,250,34),A_SETTINGS_HOME);nativeButton(panel,L"Concluir",box(486,546,138,34),A_CLOSE_PANEL);
+ } else if(requested==Page::Display) {
+  staticText(panel,L"TELA E VISUALIZAÇÃO",box(26,24,598,28));
+  staticText(panel,L"Tamanho da janela (largura × altura, incluindo bordas)",box(26,80,598,30));
+  windowPresetCombo=control(panel,L"COMBOBOX",L"",WS_TABSTOP|CBS_DROPDOWNLIST|WS_VSCROLL,box(26,122,598,220),A_WINDOW_PRESET);
+  for(int i=0;i<6;++i)SendMessageW(windowPresetCombo,CB_ADDSTRING,0,reinterpret_cast<LPARAM>(windowPresetName(i)));
+  SendMessageW(windowPresetCombo,CB_SETCURSEL,windowPreset,0);
+  staticText(panel,L"Os tamanhos são limitados à área útil do monitor, respeitando a barra de tarefas. A escala acompanha o DPI de cada monitor; janelas pequenas ajustam o conteúdo para manter as ações acessíveis.",box(26,190,598,96));
+  nativeButton(panel,L"Carrossel",box(26,320,188,40),A_VIEW_CAROUSEL);nativeButton(panel,L"Grade",box(230,320,188,40),A_VIEW_GRID);nativeButton(panel,L"Lista",box(434,320,190,40),A_VIEW_LIST);
+  nativeButton(panel,L"Tela cheia / TV (F11)",box(26,400,598,42),A_FULLSCREEN);
   nativeButton(panel,L"Voltar às configurações",box(26,546,250,34),A_SETTINGS_HOME);nativeButton(panel,L"Concluir",box(486,546,138,34),A_CLOSE_PANEL);
  } else if(requested==Page::Metrics) {
   refreshSystemMetrics(true);
@@ -436,6 +486,7 @@ void openPage(Page requested,int gameIndex) {
  ShowWindow(panel,SW_SHOW);SetForegroundWindow(panel);SetFocus(requested==Page::Players||requested==Page::Diagnostic?GetDlgItem(panel,A_CLOSE_PANEL):GetNextDlgTabItem(panel,nullptr,FALSE));
 }
 void closePanel(bool activate) {
+ if(coverPreviewWindow)closeCoverPreview(false,false);
  if(keyboardWindow)closeVirtualKeyboard(false,activate);
  if(captureWin)closeCapture(activate);
  if(!panel)return;
@@ -472,6 +523,11 @@ void commitCapture() {
 }
 void action(int id) {
  switch(id) {
+ case A_VIEW_CAROUSEL:setLibraryView(LibraryView::Carousel);break;
+ case A_VIEW_GRID:setLibraryView(LibraryView::Grid);break;
+ case A_VIEW_LIST:setLibraryView(LibraryView::List);break;
+ case A_DISPLAY:closePanel();openPage(Page::Display);break;
+ case A_WINDOW_PRESET:{const auto selected=SendMessageW(windowPresetCombo,CB_GETCURSEL,0,0);if(selected>=0&&selected<=5){const int old=windowPreset;windowPreset=static_cast<int>(selected);if(saveDatabase(panel))applyWindowPreset(windowPreset);else windowPreset=old;}break;}
  case A_OPEN:show();break;
  case A_EXIT:if(panel)closePanel();DestroyWindow(win);break;
  case A_SETTINGS:openPage(Page::Settings);break;
@@ -503,8 +559,8 @@ void action(int id) {
  case A_CLOSE_PANEL:closePanel();break;
  case A_SAVE_GAME:saveEditor();break;
  case A_BROWSE_GAME:browseGame();break;
- case A_BROWSE_COVER:if(chooseImage(panel,editingCover))SetWindowTextW(fields[5],editingCover.c_str());break;
- case A_CLEAR_COVER:editingCover.clear();SetWindowTextW(fields[5],L"Sem capa — será usada uma arte com o nome do jogo");break;
+ case A_BROWSE_COVER:{std::wstring path;if(chooseImage(panel,path))openCoverPreview(path);break;}
+ case A_CLEAR_COVER:hasCoverCrop=false;editingCover.clear();SetWindowTextW(fields[5],L"Sem capa — será usada uma arte com o nome do jogo");break;
  case A_DELETE_GAME:
   if(editorIndex>=0&&MessageBoxW(panel,L"Remover este jogo da biblioteca? Os arquivos do jogo serão preservados.",L"Remover jogo",MB_YESNO|MB_ICONQUESTION)==IDYES) {
    auto backup=games;games.erase(games.begin()+editorIndex);
@@ -562,6 +618,7 @@ void trayMenu() {
  POINT p{};GetCursorPos(&p);SetForegroundWindow(win);int id=TrackPopupMenu(menu,TPM_RETURNCMD|TPM_RIGHTBUTTON,p.x,p.y,0,win,nullptr);DestroyMenu(menu);if(id)action(id);PostMessageW(win,WM_NULL,0,0);
 }
 LRESULT CALLBACK panelProc(HWND h,UINT m,WPARAM w,LPARAM l) {
+ if(handleLayoutMessage(h,m,l))return 0;
  switch(m) {
  case WM_ERASEBKGND:return 1;
  case WM_PAINT:{PAINTSTRUCT ps{};HDC dc=BeginPaint(h,&ps);RECT r{};GetClientRect(h,&r);fill(dc,r,bg);EndPaint(h,&ps);return 0;}
@@ -575,9 +632,10 @@ LRESULT CALLBACK panelProc(HWND h,UINT m,WPARAM w,LPARAM l) {
  return DefWindowProcW(h,m,w,l);
 }
 LRESULT CALLBACK captureProc(HWND h,UINT m,WPARAM w,LPARAM l) {
+ if(handleLayoutMessage(h,m,l))return 0;
  switch(m) {
  case WM_ERASEBKGND:return 1;
- case WM_PAINT:{PAINTSTRUCT ps{};HDC dc=BeginPaint(h,&ps);paintCapture(dc);EndPaint(h,&ps);return 0;}
+ case WM_PAINT:{PAINTSTRUCT ps{};HDC dc=BeginPaint(h,&ps);const int saved=beginLogicalPaint(h,dc);paintCapture(dc);RestoreDC(dc,saved);EndPaint(h,&ps);return 0;}
  case WM_DRAWITEM:drawButton(reinterpret_cast<const DRAWITEMSTRUCT*>(l));return TRUE;
  case WM_COMMAND:if(HIWORD(w)==BN_CLICKED)action(LOWORD(w));return 0;
  case WM_CLOSE:closeCapture();return 0;
@@ -585,6 +643,7 @@ LRESULT CALLBACK captureProc(HWND h,UINT m,WPARAM w,LPARAM l) {
  return DefWindowProcW(h,m,w,l);
 }
 LRESULT CALLBACK windowProc(HWND h,UINT m,WPARAM w,LPARAM l) {
+ if(handleLayoutMessage(h,m,l))return 0;
  static const UINT taskbarCreated=RegisterWindowMessageW(L"TaskbarCreated");
  if(m==taskbarCreated){ensureTrayIcon();return 0;}
  switch(m) {
@@ -599,7 +658,7 @@ LRESULT CALLBACK windowProc(HWND h,UINT m,WPARAM w,LPARAM l) {
   if(memory)DeleteDC(memory);
   EndPaint(h,&ps);return 0; }
  case WM_SIZE:if(w==SIZE_MINIMIZED){clearArt();return 0;}InvalidateRect(h,nullptr,FALSE);return 0;
- case WM_GETMINMAXINFO:{auto info=reinterpret_cast<MINMAXINFO*>(l);if(!fullscreen){info->ptMinTrackSize.x=1000;info->ptMinTrackSize.y=760;}return 0;}
+ case WM_GETMINMAXINFO:{auto info=reinterpret_cast<MINMAXINFO*>(l);if(!fullscreen){mainMinimumSize(h,info);}return 0;}
  case WM_LBUTTONUP:case WM_LBUTTONDBLCLK: {
   POINT p=canvasPoint(POINT{GET_X_LPARAM(l),GET_Y_LPARAM(l)});
   for(const auto& hit:hits)if(PtInRect(&hit.r,p)) {const auto copy=hit;if(copy.collection>=0){if(copy.action==A_EDIT_COLLECTION)openPage(Page::Collections,copy.collection);else openCollection(static_cast<size_t>(copy.collection));}else if(copy.game>=0){selection=copy.game;keyboardFocus=-1;InvalidateRect(h,nullptr,FALSE);if(m==WM_LBUTTONDBLCLK)launch();}else action(copy.action);break;}
@@ -622,7 +681,9 @@ LRESULT CALLBACK windowProc(HWND h,UINT m,WPARAM w,LPARAM l) {
  }
  return DefWindowProcW(h,m,w,l);
 }
+void applyCoverPreview(const std::wstring& path,const CoverCrop& crop){editingCover=path;editingCrop=crop;hasCoverCrop=true;SetWindowTextW(fields[5],(path+L" — recorte pronto para salvar").c_str());}
 bool routeKey(MSG& msg) {
+ if(coverPreviewWindow)return coverPreviewRoute(msg);
  if(keyboardWindow)return keyboardRoute(msg);
  if(msg.message==WM_KEYDOWN&&msg.wParam==VK_F11){toggleFullscreen();return true;}
  HWND target=captureWin?captureWin:panel;
@@ -641,6 +702,7 @@ bool routeKey(MSG& msg) {
  case VK_UP:controllerDirection(0,-1);return true;case VK_DOWN:controllerDirection(0,1);return true;
  case VK_TAB:if(!hits.empty()){keyboardFocus=(keyboardFocus+((GetKeyState(VK_SHIFT)&0x8000)?-1:1)+static_cast<int>(hits.size()))%static_cast<int>(hits.size());InvalidateRect(win,nullptr,FALSE);}return true;
  case VK_RETURN:case VK_SPACE:activateMain();return true;
+ case 'V':setLibraryView(static_cast<LibraryView>((static_cast<int>(libraryView)+1)%3));return true;
  case 'F':toggleFavorite();return true;case 'S':openPage(Page::Settings);return true;
  case 'A':openPage(Page::Editor);return true;case 'E':if(selection>=0)openPage(Page::Editor,selection);return true;
  case 'P':openPage(Page::Profile);return true;
@@ -655,12 +717,14 @@ void activateMain() {
  } else if(collectionsHome){if(!collections.empty())openCollection(static_cast<size_t>(collectionPage*6));}else launch();
 }
 void controllerDirection(int dx,int dy) {
+ if(coverPreviewWindow){coverPreviewDirection(dx,dy);return;}
  if(keyboardWindow){keyboardDirection(dx,dy);return;}
  if(captureWin)return;
  if(panel){HWND focus=GetFocus();wchar_t cls[32]{};GetClassNameW(focus,cls,32);
   if(dy&&lstrcmpiW(cls,L"LISTBOX")==0){const int count=static_cast<int>(SendMessageW(focus,LB_GETCOUNT,0,0));if(count>0){int caret=static_cast<int>(SendMessageW(focus,LB_GETCARETINDEX,0,0));SendMessageW(focus,LB_SETCARETINDEX,std::clamp(caret+dy,0,count-1),FALSE);}return;}
   if(dy&&lstrcmpiW(cls,L"COMBOBOX")==0){const auto count=SendMessageW(focus,CB_GETCOUNT,0,0);const auto current=SendMessageW(focus,CB_GETCURSEL,0,0);if(count>0){SendMessageW(focus,CB_SETCURSEL,std::clamp<LRESULT>(current+dy,0,count-1),0);SendMessageW(panel,WM_COMMAND,MAKEWPARAM(GetDlgCtrlID(focus),CBN_SELCHANGE),reinterpret_cast<LPARAM>(focus));}return;}
   HWND next=GetNextDlgTabItem(panel,focus,dx<0||dy<0);if(next)SetFocus(next);return;}
+ if(navigateLibrary(dx,dy))return;
  int current=keyboardFocus;
  if(current<0||current>=static_cast<int>(hits.size())) {
   // Horizontal movement stays on the carousel and scrolls beyond visible cards.
@@ -683,6 +747,7 @@ void controllerDirection(int dx,int dy) {
  if(target>=0){keyboardFocus=target;if(hits[target].game>=0){selection=hits[target].game;keyboardFocus=-1;}InvalidateRect(win,nullptr,FALSE);}
 }
 void controllerButtons(HANDLE h,const std::set<USAGE>& now,const std::set<USAGE>& previous) {
+ if(coverPreviewWindow){if(!selfTesting&&GetForegroundWindow()!=coverPreviewWindow)return;for(auto b:now)if(!previous.count(b)){if(b==*profileBinding(A_CAPTURE_BACK)){closeCoverPreview(false);return;}if(b==*profileBinding(A_CAPTURE_OK)){coverPreviewConfirm();return;}}return;}
  if(captureWin&&!captureProfileKey.empty())useControllerProfile(captureProfileKey);
  if(keyboardWindow){if(!selfTesting&&GetForegroundWindow()!=keyboardWindow)return;for(auto b:now)if(!previous.count(b)){if(b==*profileBinding(A_CAPTURE_BACK)){closeVirtualKeyboard(false);return;}if(b==*profileBinding(A_CAPTURE_OK)){keyboardConfirm();return;}}return;}
  if(captureWin) {
