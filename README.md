@@ -15,7 +15,7 @@ Um launcher nativo para Windows que reúne seus jogos, permite navegar pelo cont
 
 **Multiplayer local com até 4 controles · Coleções por tópicos · Perfis por dispositivo · RAM medida pelo Windows · Sinal Wi-Fi · Bandeja persistente**
 
-Versão **1.1.5**: configurações separadas por função, monitor de jogadores sem teste automático, coleções com cadastro próprio e correções na ida para a bandeja. Veja o [guia operacional](LEIA-ME.md).
+Versão **1.2.0**: biblioteca em carrossel, grade ou lista; retorno de vibração por jogador; prévia com recorte de capas; escala por monitor e tamanhos de janela para notebook, PC e TV. Veja o [guia operacional](LEIA-ME.md).
 
 [📦 Downloads](https://github.com/BrendoGarcia/FeatherPad/releases) · [⚙️ Compilar pelo GitHub](#️-build-pelo-github-sem-instalar-compilador) · [📖 Guia operacional](LEIA-ME.md) · [🐛 Relatar problema](https://github.com/BrendoGarcia/FeatherPad/issues)
 
@@ -49,6 +49,14 @@ Além de organizar e abrir jogos, o launcher pode ler um controle compatível e 
 - [Solução de problemas](#-solução-de-problemas)
 - [Código, contribuições e licença](#-código-contribuições-e-licença)
 
+## 🖥️ Visualização, tamanho e monitores
+
+Use **Carrossel / Grade / Lista** na biblioteca ou pressione **V**. A preferência fica salva e funciona também dentro de coleções e Favoritos, com a pesquisa atual. Na grade, ↑↓ avança por fileiras; na lista, por títulos. Suba a partir da primeira fileira para alcançar as ações. A seleção rola automaticamente para permanecer visível.
+
+Em **Configurações → Tela, tamanho e visualização**, escolha Automático, Compacto (960 × 600), Notebook (1280 × 720), Desktop (1600 × 900), Full HD (1920 × 1080) ou Maximizado. Esses tamanhos incluem as bordas e são limitados à área útil do monitor: não escondem ações atrás da barra de tarefas. F11 mantém a tela cheia sem bordas e restaura o estado anterior ao sair.
+
+O programa ativa Per-Monitor DPI Awareness V2 nos Windows compatíveis e trata `WM_DPICHANGED`. Biblioteca, formulários, captura de botões, teclado e prévia de capa usam coordenadas lógicas e redimensionam junto com a escala. Quando falta espaço, o conteúdo reduz proporcionalmente para preservar as ações; em janelas compactas os textos podem ficar menores. O programa não altera a resolução nem a escala do Windows.
+
 ## 🚀 Recursos
 
 | Recurso | O que você pode fazer |
@@ -57,7 +65,10 @@ Além de organizar e abrir jogos, o launcher pode ler um controle compatível e 
 | **Teclado virtual** | Pesquisar e editar campos de texto pelo controle, com aplicação/cancelamento e cursor. |
 | **Tela cheia / TV** | Usar a biblioteca sem bordas, com escala dos elementos e restauração da janela pelo F11. |
 | **Atualização pelo aplicativo** | Consultar Releases, baixar arquivos alterados com SHA-256 e aplicar pelo Updater separado. |
-| **Biblioteca visual** | Navegar por cartões com capas, carrossel e destaque do jogo selecionado. |
+| **Biblioteca visual** | Alternar carrossel, grade ou lista, com pesquisa, rolagem pelo controle e seleção visível. |
+| **Prévia de capa** | Conferir o recorte, mover o enquadramento e ajustar o zoom antes de importar. |
+| **Vibração por jogador** | Encaminhar os dois motores da saída Xbox/DS4 virtual para o controle físico compatível. |
+| **Tamanho e DPI** | Escolher predefinições de janela e adaptar biblioteca, teclado e diálogos ao monitor. |
 | **Cadastro de jogos** | Adicionar executáveis, atalhos, URLs e URIs de lojas, com argumentos e pasta de trabalho opcionais. |
 | **Favoritos** | Marcar seus jogos preferidos e acessar uma coleção filtrada. |
 | **Perfil local** | Personalizar o nome e a imagem exibidos na biblioteca. |
@@ -126,7 +137,7 @@ O FeatherPad não procura instalações automaticamente, não baixa jogos e não
 
 ### Capas
 
-Use **Escolher capa** e selecione uma imagem local PNG, JPG ou BMP. Uma capa vertical, aproximadamente **600 × 900 pixels**, funciona bem.
+Use **Escolher capa** e selecione uma imagem local PNG, JPG ou BMP. A prévia abre antes da importação: ajuste posição e zoom, depois escolha **Usar recorte** e salve o jogo. O recorte é convertido para **300 × 420 pixels (5:7)**; a imagem original permanece intacta.
 
 - Entrada máxima: **2048 × 2048 pixels e 8 MB**.
 - A imagem é copiada e convertida para uma miniatura PNG de até **300 × 420 pixels**, mantendo a proporção.
@@ -254,7 +265,7 @@ O FeatherPad não configura o HidHide automaticamente. No primeiro teste, feche 
 - Ao mostrar a biblioteca, a saída virtual fica neutra. Depois de iniciar um jogo, o encaminhamento aguarda os comandos voltarem ao repouso.
 - Desconectar o físico remove a saída virtual; reconectar recria o dispositivo.
 - O monitor precisa continuar aberto em segundo plano durante o jogo.
-- Esta versão não encaminha vibração, giroscópio, áudio, LEDs, gatilhos adaptativos ou touchpad como ponteiro. A saída PlayStation é DualShock 4, não emulação completa de DualSense.
+- A vibração convencional (dois motores) da saída Xbox/DS4 virtual é encaminhada por jogador ao hardware que oferece rumble via SDL, inclusive USB/Bluetooth quando o dispositivo e seu driver suportam. A biblioteca aberta interrompe os motores; desconexão, troca de formato e encerramento liberam o retorno. O modo nativo continua sob responsabilidade do jogo/driver. Giroscópio, áudio, LEDs, gatilhos adaptativos e touchpad como ponteiro não são encaminhados. A saída PlayStation é DualShock 4, não emulação completa de DualSense.
 - Políticas do Windows, jogos e anti-cheat podem restringir dispositivos virtuais. Não há injeção de DLL no jogo ou bypass de anti-cheat.
 
 > **Dependência externa:** ViGEmBus e ViGEmClient são projetos aposentados. A integração é opcional e utiliza a versão oficial 1.22.0 do driver, que removeu o atualizador legado. Consulte o [aviso de fim de vida](https://docs.nefarius.at/projects/ViGEm/End-of-Life/) e evite antigos atualizadores.
@@ -298,7 +309,7 @@ A arquitetura evita um motor de navegador e mantém a interface simples:
 
 - UI Win32/GDI com fontes do sistema, sem animações ou vídeos.
 - Miniaturas locais em vez de carregar capas grandes durante a navegação.
-- Cache limitado a seis miniaturas de até 300 × 420 pixels: aproximadamente **2,9 MiB de pixels**, além das demais estruturas.
+- Cache limitado a vinte miniaturas de até 300 × 420 pixels: aproximadamente **9,6 MiB de pixels**, além das demais estruturas.
 - Cache liberado ao ocultar/minimizar e buffer de pintura temporário.
 - Backend Raw Input orientado a eventos quando a compatibilidade está desativada.
 - SDL carregada sob demanda quando a compatibilidade está ativada.

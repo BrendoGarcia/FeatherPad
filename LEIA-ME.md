@@ -1,3 +1,25 @@
+# FeatherPad 1.2.0 — biblioteca, vibração, capas e telas
+
+## Novidades e como usar
+
+- **Carrossel, grade e lista:** escolha o botão na biblioteca, pressione V ou use Configurações → Tela, tamanho e visualização. A escolha fica salva. Coleções, Favoritos e pesquisa continuam combinando com qualquer modo. Na grade, ↑↓ muda de fileira; na lista, de título. Suba a partir do primeiro grupo de jogos para acessar as ações.
+- **Vibração:** com a compatibilidade ativa e uma saída Xbox ou PlayStation virtual, os dois motores enviados pelo jogo retornam ao controle físico correspondente, para até quatro jogadores. USB/Bluetooth dependem do suporte real do hardware/driver via SDL. A UI aberta interrompe a vibração; troca de formato, desconexão e encerramento cancelam o leitor antes de liberar o dispositivo. Não inclui áudio, giroscópio, LEDs ou gatilhos adaptativos. No modo nativo, o jogo e o driver controlam o retorno diretamente.
+- **Prévia de capa:** Escolher capa abre uma prévia 5:7. Ajuste posição e zoom pelos botões, arraste sobre a imagem ou use a roda do mouse. Usar recorte transfere para o rascunho; Salvar jogo importa uma miniatura 300 × 420. Cancelar conserva a capa anterior. O arquivo original não é modificado. Áreas de capa com outra proporção podem aplicar recorte central adicional.
+- **Escala por monitor:** o app trata mudanças de DPI e usa coordenadas lógicas na biblioteca, configurações, teclado e prévia. As janelas auxiliares ajustam-se ao monitor atual, inclusive em telas pequenas.
+- **Tamanhos de janela:** Configurações → Tela, tamanho e visualização oferece Automático, 960 × 600, 1280 × 720, 1600 × 900, 1920 × 1080 e Maximizado. Os valores incluem as bordas e respeitam a barra de tarefas. Em telas menores o tamanho é limitado à área útil; a interface reduz proporcionalmente. F11 alterna tela cheia/TV e restaura o estado anterior.
+
+O cache de imagens mantém até vinte miniaturas (máximo aproximado de 9,6 MiB em pixels), liberadas ao ocultar a biblioteca. Grade limitada a 18 cartões por página visível. RAM continua medida pelas APIs do Windows; consumo final varia com resolução, capas e compatibilidade.
+
+## Verificação
+
+A suíte nativa cobre rolagem em bibliotecas grandes, pesquisa e persistência dos modos, limites dos diálogos e teclado, tratamento de mudança de DPI, recorte real de pixels e cancelamento, além de retorno de motores em quatro dispositivos SDL virtuais independentes. Mantém as regressões de bandeja, controles, migração, integridade de atualização e recuperação.
+
+Os testes automatizados não substituem a validação de vibração em controles físicos nem a troca entre monitores reais com escalas distintas. O build permanece pelo GitHub Actions; esta mudança de código não publica uma Release.
+
+---
+
+## Histórico: versão 1.1.5
+
 # FeatherPad 1.1.5 — correções de controles, coleções e bandeja
 
 ## Correções desta versão
@@ -47,7 +69,7 @@ produzido pelo workflow). Nesse caso oferece baixar o ZIP para inspecionar o con
 não informa que o aplicativo está atualizado sem conferir os arquivos.
 
 O ZIP é conferido pelo SHA-256 fornecido pela API do GitHub. A extração é nativa, usando
-somente o inflador estático da zlib 1.0.1: não abre PowerShell, navegador ou outro programa.
+somente o inflador estático da zlib 1.3.1: não abre PowerShell, navegador ou outro programa.
 São aceitos ZIP armazenado/Deflate e um pacote na raiz ou dentro de uma pasta. ZIP64,
 criptografia, links, caminhos absolutos/ascendentes, nomes duplicados, CRC incorreto e
 arquivos fora dos limites são rejeitados. Apenas os arquivos conhecidos são extraídos;

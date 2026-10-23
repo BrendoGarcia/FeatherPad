@@ -18,6 +18,7 @@ IWICImagingFactory* imaging=nullptr;
 
 int WINAPI wWinMain(HINSTANCE h,HINSTANCE,LPWSTR args,int) {
  if(std::wstring(args)==L"--launch-fixture"){Sleep(1200);return 0;}
+ enablePerMonitorDpi();
  instance=h;selfTesting=std::wstring(args).find(L"--self-test")!=std::wstring::npos;
  HANDLE singleton=nullptr;
  if(!selfTesting) {
@@ -48,7 +49,7 @@ int WINAPI wWinMain(HINSTANCE h,HINSTANCE,LPWSTR args,int) {
  win=CreateWindowExW(0,L"FeatherPadWindow",(L"FeatherPad v"+updates::wide(FEATHERPAD_VERSION)+L" — Sua biblioteca de jogos").c_str(),WS_OVERLAPPEDWINDOW|WS_CLIPCHILDREN,CW_USEDEFAULT,CW_USEDEFAULT,bounds.right-bounds.left,bounds.bottom-bounds.top,nullptr,nullptr,h,nullptr);
  int result=1;
  if(win) {
-  darkTitle(win);rebuildLibrary();
+  darkTitle(win);applyWindowPreset(windowPreset);rebuildLibrary();
   if(selfTesting){result=runSelfTest();if(panel)closePanel();DestroyWindow(win);}
   else {
    bridgeReconfigure();SetTimer(win,LIBRARY_TIMER,1000,nullptr);

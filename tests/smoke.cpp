@@ -145,7 +145,7 @@ int runSelfTest() {
  openPage(Page::Diagnostic);controllerButtons(fake,{7},{});
  check(textOf(GetDlgItem(panel,420)).find(L"7")!=std::wstring::npos,"diagnostic shows inputs without rebinding");closePanel();
  openPage(Page::Compatibility);check(GetDlgItem(panel,A_COMPAT_TOGGLE)!=nullptr&&GetDlgItem(panel,A_COMPAT_DEFAULT)!=nullptr,"controller compatibility panel exposes activation and default format");closePanel();
- failed+=controllerStateSelfTest(log);failed+=bridgeSelfTest(log);failed+=regressions115(log);
+ failed+=controllerStateSelfTest(log);failed+=bridgeSelfTest(log);failed+=regressions115(log);failed+=displayFeaturesTest(log);
  clearArt();cleanup(dataFolder);log+="\nFailures: "+std::to_string(failed)+"\n";
  writeBytes(L"self-test.log",log.data(),static_cast<DWORD>(log.size()));return failed?1:0;
 }

@@ -2,7 +2,7 @@
 
 namespace {
  std::map<std::wstring,Art> cache;
- constexpr size_t maxThumbnails=6;
+ constexpr size_t maxThumbnails=20;
  template<class T> struct Com {
   T* p=nullptr;
   ~Com(){if(p)p->Release();}
@@ -76,4 +76,19 @@ bool saveThumbnail(const std::wstring& source,const std::wstring& destination) {
  good=good&&SUCCEEDED(frame->SetSize(static_cast<UINT>(art.width),static_cast<UINT>(art.height)))&&SUCCEEDED(frame->SetPixelFormat(&format));
  good=good&&SUCCEEDED(frame->WriteSource(bitmap.p,nullptr))&&SUCCEEDED(frame->Commit())&&SUCCEEDED(encoder->Commit());
  DeleteObject(art.bitmap);return good;
+}
+
+// Crop at source resolution, then materialize only a 300x420 output bitmap.
+bool saveCroppedThumbnail(const std::wstring& source,const std::wstring& destination,const CoverCrop& crop) {
+ Com<IWICBitmapDecoder> decoder;Com<IWICBitmapFrameDecode> input;UINT w=0,h=0;if(!openImage(source,decoder,input,w,h))return false;
+ RECT rect=coverCropRect(static_cast<int>(w),static_cast<int>(h),crop);WICRect region{rect.left,rect.top,rect.right-rect.left,rect.bottom-rect.top};
+ Com<IWICBitmapClipper> clipper;Com<IWICBitmapScaler> scaler;Com<IWICFormatConverter> converter;Com<IWICStream> stream;Com<IWICBitmapEncoder> encoder;Com<IWICBitmapFrameEncode> output;
+ if(FAILED(imaging->CreateBitmapClipper(clipper.address()))||FAILED(clipper->Initialize(input.p,&region)))return false;
+ if(FAILED(imaging->CreateBitmapScaler(scaler.address()))||FAILED(scaler->Initialize(clipper.p,300,420,WICBitmapInterpolationModeFant)))return false;
+ if(FAILED(imaging->CreateFormatConverter(converter.address()))||FAILED(converter->Initialize(scaler.p,GUID_WICPixelFormat24bppBGR,WICBitmapDitherTypeNone,nullptr,0,WICBitmapPaletteTypeCustom)))return false;
+ if(FAILED(imaging->CreateStream(stream.address()))||FAILED(stream->InitializeFromFilename(destination.c_str(),GENERIC_WRITE)))return false;
+ if(FAILED(imaging->CreateEncoder(GUID_ContainerFormatPng,nullptr,encoder.address()))||FAILED(encoder->Initialize(stream.p,WICBitmapEncoderNoCache)))return false;
+ if(FAILED(encoder->CreateNewFrame(output.address(),nullptr))||FAILED(output->Initialize(nullptr))||FAILED(output->SetSize(300,420)))return false;
+ WICPixelFormatGUID format=GUID_WICPixelFormat24bppBGR;
+ return SUCCEEDED(output->SetPixelFormat(&format))&&SUCCEEDED(output->WriteSource(converter.p,nullptr))&&SUCCEEDED(output->Commit())&&SUCCEEDED(encoder->Commit());
 }

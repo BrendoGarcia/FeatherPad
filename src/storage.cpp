@@ -14,6 +14,8 @@ bool validField(const std::wstring& s,size_t max) {
  return s.size()<=max && s.find_first_of(L"\r\n\0",0,3)==std::wstring::npos;
 }
 void loadDatabase() {
+ const auto view=GetPrivateProfileIntW(L"Settings",L"LibraryView",0,ini.c_str());libraryView=view<=2?static_cast<LibraryView>(view):LibraryView::Carousel;
+ windowPreset=std::clamp(static_cast<int>(GetPrivateProfileIntW(L"Settings",L"WindowPreset",0,ini.c_str())),0,5);
  games.clear();collections.clear();collectionFilter.clear();collectionsHome=false;
  controllerCompatibility=GetPrivateProfileIntW(L"Settings",L"ControllerCompatibility",0,ini.c_str())!=0;
  auto mode=GetPrivateProfileIntW(L"Settings",L"DefaultControllerMode",2,ini.c_str());
@@ -52,6 +54,7 @@ bool saveDatabase(HWND owner) {
   L"\r\nFavorite="+std::to_wstring(starButton)+L"\r\nAutoOpen="+(autoOpen?L"1":L"0")+L"\r\n";
  auto field=[&s](const wchar_t* key,const std::wstring& value) { s+=std::wstring(key)+L"=\""+value+L"\"\r\n"; };
  s+=L"ControllerCompatibility="+std::wstring(controllerCompatibility?L"1":L"0")+L"\r\nDefaultControllerMode="+std::to_wstring(static_cast<int>(defaultControllerMode))+L"\r\n";
+ s+=L"LibraryView="+std::to_wstring(static_cast<int>(libraryView))+L"\r\nWindowPreset="+std::to_wstring(windowPreset)+L"\r\n";
  field(L"PreferredController",preferredControllerGuid);
  s+=L"[Profile]\r\n";field(L"Name",profileName);field(L"Avatar",avatarPath);
  s+=L"[Games]\r\nCount="+std::to_wstring(games.size())+L"\r\n";
@@ -82,7 +85,7 @@ bool saveDatabase(HWND owner) {
  }
  return true;
 }
-bool importArt(std::wstring& path,HWND owner) {
+bool importArt(std::wstring& path,HWND owner,const CoverCrop* crop) {
  if(path.empty())return true;
  if(!validateArt(path)) {
   MessageBoxW(owner,L"Escolha uma imagem PNG, JPG ou BMP válida, de até 2048 × 2048 pixels e 8 MB. A capa é reduzida automaticamente para economizar memória.",L"Não foi possível carregar a imagem",MB_ICONWARNING);
@@ -91,11 +94,11 @@ bool importArt(std::wstring& path,HWND owner) {
  const auto artFolder=dataFolder+L"\\art";
  CreateDirectoryW(artFolder.c_str(),nullptr);
  // Imported files already inside our managed directory need no duplicate copy.
- if(path.compare(0,artFolder.size()+1,artFolder+L"\\")==0)return true;
+ if(!crop&&path.compare(0,artFolder.size()+1,artFolder+L"\\")==0)return true;
  GUID id{}; if(FAILED(CoCreateGuid(&id)))return false;
  wchar_t guid[40]{};StringFromGUID2(id,guid,40);
  const auto destination=artFolder+L"\\"+guid+L".png";
- if(!saveThumbnail(path,destination)) {
+ if(!(crop?saveCroppedThumbnail(path,destination,*crop):saveThumbnail(path,destination))) {
   DeleteFileW(destination.c_str());
   MessageBoxW(owner,L"Não foi possível importar a imagem. Confira as permissões da pasta do perfil.",L"FeatherPad",MB_ICONERROR);return false;
  }

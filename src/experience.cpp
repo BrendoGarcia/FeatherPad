@@ -35,7 +35,7 @@ namespace {
   wchar_t c=code==61?L' ':character(code);if(c){auto s=std::wstring(1,c);SendMessageW(keyboardEdit,EM_REPLACESEL,TRUE,reinterpret_cast<LPARAM>(s.c_str()));}
  }
  void background(HDC dc){
-  RECT r{};GetClientRect(keyboardWindow,&r);HBRUSH b=CreateSolidBrush(RGB(12,15,20));FillRect(dc,&r,b);DeleteObject(b);
+  RECT r=logicalClient(keyboardWindow);HBRUSH b=CreateSolidBrush(RGB(12,15,20));FillRect(dc,&r,b);DeleteObject(b);
   auto old=SelectObject(dc,titleFont);SetTextColor(dc,RGB(239,245,250));SetBkMode(dc,TRANSPARENT);RECT title{28,18,r.right-180,56};DrawTextW(dc,destination?L"Editar texto":L"Pesquisar na biblioteca",-1,&title,DT_LEFT|DT_SINGLELINE|DT_VCENTER);
   SelectObject(dc,textFont);SetTextColor(dc,RGB(155,167,182));RECT help{28,r.bottom-32,r.right-28,r.bottom-8};DrawTextW(dc,L"Direcional: mover   ·   Confirmar: digitar   ·   Voltar: cancelar   ·   ↵: aplicar",-1,&help,DT_CENTER|DT_SINGLELINE|DT_VCENTER);SelectObject(dc,old);
  }
@@ -66,12 +66,13 @@ namespace {
   return CallWindowProcW(old,h,m,w,l);
  }
  LRESULT CALLBACK keyboardProc(HWND h,UINT m,WPARAM w,LPARAM l){
+  if(handleLayoutMessage(h,m,l))return 0;
   switch(m){
   case WM_ERASEBKGND:return 1;
-  case WM_PAINT:{PAINTSTRUCT ps{};HDC dc=BeginPaint(h,&ps);background(dc);EndPaint(h,&ps);return 0;}
-  case WM_PRINTCLIENT:background(reinterpret_cast<HDC>(w));return 0;
+  case WM_PAINT:{PAINTSTRUCT ps{};HDC dc=BeginPaint(h,&ps);const int saved=beginLogicalPaint(h,dc);background(dc);RestoreDC(dc,saved);EndPaint(h,&ps);return 0;}
+  case WM_PRINTCLIENT:{HDC dc=reinterpret_cast<HDC>(w);const int saved=beginLogicalPaint(h,dc);background(dc);RestoreDC(dc,saved);return 0;}
   case WM_CTLCOLOREDIT:{HDC dc=reinterpret_cast<HDC>(w);SetTextColor(dc,RGB(240,245,250));SetBkColor(dc,RGB(27,33,43));static HBRUSH editBrush=CreateSolidBrush(RGB(27,33,43));return reinterpret_cast<LRESULT>(editBrush);}
-  case WM_DRAWITEM:drawKey(reinterpret_cast<const DRAWITEMSTRUCT*>(l));return TRUE;
+  case WM_DRAWITEM:{auto item=*reinterpret_cast<const DRAWITEMSTRUCT*>(l);const int saved=beginLogicalPaint(h,item.hDC);const double scale=uiScale(h);item.rcItem.right=static_cast<LONG>(item.rcItem.right/scale);item.rcItem.bottom=static_cast<LONG>(item.rcItem.bottom/scale);drawKey(&item);RestoreDC(item.hDC,saved);return TRUE;}
   case WM_COMMAND:if(HIWORD(w)==BN_CLICKED&&LOWORD(w)>=700&&LOWORD(w)<770){press(LOWORD(w)-700);return 0;}break;
   case WM_CLOSE:closeVirtualKeyboard(false);return 0;
   }
@@ -83,15 +84,15 @@ void openVirtualKeyboard(HWND target){
  if(keyboardWindow){SetForegroundWindow(keyboardWindow);return;}
  destination=target;keyboardOwner=panel?panel:win;upper=false;layout=0;keyFocus=0;hoverKey=-1;
  WNDCLASSW c{};c.hInstance=instance;c.hCursor=LoadCursorW(nullptr,IDC_ARROW);c.lpfnWndProc=keyboardProc;c.lpszClassName=L"FeatherPadKeyboard";RegisterClassW(&c);
- MONITORINFO monitor{};monitor.cbSize=sizeof(monitor);GetMonitorInfoW(MonitorFromWindow(keyboardOwner,MONITOR_DEFAULTTONEAREST),&monitor);
- int width=std::min(1180L,monitor.rcWork.right-monitor.rcWork.left-32),height=std::min(680L,monitor.rcWork.bottom-monitor.rcWork.top-32);
- keyboardWindow=CreateWindowExW(WS_EX_DLGMODALFRAME,c.lpszClassName,L"Teclado virtual",WS_POPUP|WS_BORDER|WS_CLIPCHILDREN,monitor.rcWork.left+(monitor.rcWork.right-monitor.rcWork.left-width)/2,monitor.rcWork.top+(monitor.rcWork.bottom-monitor.rcWork.top-height)/2,width,height,keyboardOwner,nullptr,instance,nullptr);if(!keyboardWindow)return;
+ const int width=1180;
+ keyboardWindow=createFittedWindow(c.lpszClassName,L"Teclado virtual",1180,680,keyboardOwner,WS_POPUP|WS_BORDER);if(!keyboardWindow)return;
  auto font=[](int n,int weight){return CreateFontW(-n,0,0,0,weight,FALSE,FALSE,FALSE,DEFAULT_CHARSET,OUT_DEFAULT_PRECIS,CLIP_DEFAULT_PRECIS,CLEARTYPE_QUALITY,DEFAULT_PITCH,L"Segoe UI");};
  keyFont=font(width>=1000?38:28,FW_NORMAL);textFont=font(width>=1000?18:14,FW_NORMAL);titleFont=font(24,FW_SEMIBOLD);
- RECT area{};GetClientRect(keyboardWindow,&area);const int cw=area.right,ch=area.bottom;
+ RECT area=logicalClient(keyboardWindow);const int cw=area.right,ch=area.bottom;
  keyboardEdit=CreateWindowExW(WS_EX_CLIENTEDGE,L"EDIT",(target?textOf(target):searchQuery).c_str(),WS_CHILD|WS_VISIBLE|WS_TABSTOP|ES_AUTOHSCROLL,28,70,cw-56,48,keyboardWindow,reinterpret_cast<HMENU>(690),instance,nullptr);
+ registerLogicalChild(keyboardWindow,keyboardEdit,RECT{28,70,cw-28,118});
  SendMessageW(keyboardEdit,WM_SETFONT,reinterpret_cast<WPARAM>(titleFont),TRUE);SendMessageW(keyboardEdit,EM_SETLIMITTEXT,target?SendMessageW(target,EM_GETLIMITTEXT,0,0):160,0);SendMessageW(keyboardEdit,EM_SETSEL,static_cast<WPARAM>(-1),-1);
- auto add=[&](int code,const std::wstring& label,int x,int y,int w,int h){HWND key=CreateWindowExW(0,L"BUTTON",label.c_str(),WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,x,y,w,h,keyboardWindow,reinterpret_cast<HMENU>(static_cast<INT_PTR>(700+code)),instance,nullptr);SendMessageW(key,WM_SETFONT,reinterpret_cast<WPARAM>(keyFont),TRUE);SetPropW(key,L"KeyOriginal",reinterpret_cast<HANDLE>(SetWindowLongPtrW(key,GWLP_WNDPROC,reinterpret_cast<LONG_PTR>(keyProc))));};
+ auto add=[&](int code,const std::wstring& label,int x,int y,int w,int h){HWND key=CreateWindowExW(0,L"BUTTON",label.c_str(),WS_CHILD|WS_VISIBLE|WS_TABSTOP|BS_OWNERDRAW,x,y,w,h,keyboardWindow,reinterpret_cast<HMENU>(static_cast<INT_PTR>(700+code)),instance,nullptr);registerLogicalChild(keyboardWindow,key,RECT{x,y,x+w,y+h});SendMessageW(key,WM_SETFONT,reinterpret_cast<WPARAM>(keyFont),TRUE);SetPropW(key,L"KeyOriginal",reinterpret_cast<HANDLE>(SetWindowLongPtrW(key,GWLP_WNDPROC,reinterpret_cast<LONG_PTR>(keyProc))));};
  add(65,L"Fechar ×",cw-164,16,136,40);add(66,L"← cursor",28,130,104,36);add(67,L"cursor →",140,130,104,36);add(69,L"Fim",252,130,88,36);add(63,L"Limpar",348,130,104,36);
  const double unit=(cw-56)/10.0;const int top=186,step=(ch-top-42)/4;
  auto rowKey=[&](int code,const std::wstring& label,double x,double units,int row){add(code,label,28+static_cast<int>(x*unit),top+row*step,static_cast<int>(units*unit)-5,step-7);};
@@ -136,9 +137,16 @@ void toggleFullscreen(){
  SetWindowPos(win,HWND_TOP,m.rcMonitor.left,m.rcMonitor.top,m.rcMonitor.right-m.rcMonitor.left,m.rcMonitor.bottom-m.rcMonitor.top,SWP_FRAMECHANGED|SWP_SHOWWINDOW);clearArt();
 }
 void leaveFullscreen(){if(!fullscreen)return;fullscreen=false;SetWindowLongPtrW(win,GWL_STYLE,oldStyle);SetWindowLongPtrW(win,GWL_EXSTYLE,oldExStyle);SetWindowPlacement(win,&placement);SetWindowPos(win,nullptr,0,0,0,0,SWP_NOMOVE|SWP_NOSIZE|SWP_NOZORDER|SWP_FRAMECHANGED);InvalidateRect(win,nullptr,FALSE);}
-POINT canvasPoint(POINT p){if(!fullscreen)return p;RECT r{};GetClientRect(win,&r);const double scale=std::min(r.right/1100.0,r.bottom/760.0);if(scale<=0)return p;return POINT{static_cast<LONG>((p.x-(r.right-1100*scale)/2)/scale),static_cast<LONG>((p.y-(r.bottom-760*scale)/2)/scale)};}
+namespace {
+ struct Canvas {int width,height;double scale;int x,y;};
+ Canvas mainCanvas(RECT r){
+  if(fullscreen){const double scale=std::max(.01,std::min(r.right/1100.0,r.bottom/760.0));return {1100,760,scale,static_cast<int>((r.right-1100*scale)/2),static_cast<int>((r.bottom-760*scale)/2)};}
+  const double scale=std::max(.01,std::min({windowDpi(win)/96.0,r.right/1000.0,r.bottom/700.0}));
+  return {static_cast<int>(r.right/scale),static_cast<int>(r.bottom/scale),scale,0,0};
+ }
+}
+POINT canvasPoint(POINT p){RECT r{};GetClientRect(win,&r);const auto canvas=mainCanvas(r);return POINT{static_cast<LONG>((p.x-canvas.x)/canvas.scale),static_cast<LONG>((p.y-canvas.y)/canvas.scale)};}
 void paintCanvas(HDC dc,RECT r){
- if(!fullscreen){paintMain(dc,r);return;}
  HBRUSH bg=CreateSolidBrush(RGB(12,17,25));FillRect(dc,&r,bg);DeleteObject(bg);
- const double scale=std::min(r.right/1100.0,r.bottom/760.0);int saved=SaveDC(dc);SetMapMode(dc,MM_ANISOTROPIC);SetWindowExtEx(dc,1100,760,nullptr);SetViewportExtEx(dc,static_cast<int>(1100*scale),static_cast<int>(760*scale),nullptr);SetViewportOrgEx(dc,static_cast<int>((r.right-1100*scale)/2),static_cast<int>((r.bottom-760*scale)/2),nullptr);paintMain(dc,RECT{0,0,1100,760});RestoreDC(dc,saved);
+ const auto canvas=mainCanvas(r);const int saved=SaveDC(dc);SetMapMode(dc,MM_ANISOTROPIC);SetWindowExtEx(dc,10000,10000,nullptr);SetViewportExtEx(dc,static_cast<int>(10000*canvas.scale),static_cast<int>(10000*canvas.scale),nullptr);SetViewportOrgEx(dc,canvas.x,canvas.y,nullptr);paintMain(dc,RECT{0,0,canvas.width,canvas.height});RestoreDC(dc,saved);
 }
