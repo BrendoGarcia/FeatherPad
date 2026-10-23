@@ -71,7 +71,7 @@ namespace {
   else {
    const COLORREF colors[]={RGB(36,73,91),RGB(69,51,95),RGB(78,67,42),RGB(36,77,66),RGB(71,45,63)};
    round(dc,r,colors[static_cast<size_t>(std::max(index,0))%5]);
-   if(r.right-r.left<80||r.bottom-r.top<100){label(dc,g.name.substr(0,1),r,mediumFont,white,DT_CENTER|DT_VCENTER|DT_SINGLELINE);return;}
+   if(r.right-r.left<80||r.bottom-r.top<180){label(dc,g.name.substr(0,1),r,r.right-r.left>=100?heroFont:mediumFont,white,DT_CENTER|DT_VCENTER|DT_SINGLELINE);return;}
    // A typographic fallback keeps the library useful before covers are imported.
    const int w=r.right-r.left,h=r.bottom-r.top;
    lineAt(dc,r.left+18,r.top+22,w-36,RGB(112,137,154));
@@ -327,6 +327,7 @@ void drawButton(const DRAWITEMSTRUCT* source) {
  DRAWITEMSTRUCT copy=*source;const int saved=beginLogicalPaint(GetParent(copy.hwndItem),copy.hDC);
  const double scale=uiScale(GetParent(copy.hwndItem));copy.rcItem.right=static_cast<LONG>(copy.rcItem.right/scale);copy.rcItem.bottom=static_cast<LONG>(copy.rcItem.bottom/scale);
  struct Restore {HDC dc;int saved;~Restore(){RestoreDC(dc,saved);}} restore{copy.hDC,saved};const auto* item=&copy;
+ fill(item->hDC,item->rcItem,bg);
  const bool toggle=item->CtlID==A_STARTUP||item->CtlID==A_AUTOOPEN||item->CtlID==A_DRAFT_FAVORITE||item->CtlID==A_COMPAT_TOGGLE;
  if(toggle) {
   const bool checked=item->CtlID==A_STARTUP?startupEnabled():item->CtlID==A_AUTOOPEN?autoOpen:item->CtlID==A_COMPAT_TOGGLE?controllerCompatibility:favoriteDraft;
@@ -341,7 +342,7 @@ void drawButton(const DRAWITEMSTRUCT* source) {
   return;
  }
 
- const bool primary=item->CtlID==A_PLAY||item->CtlID==A_SAVE_GAME||item->CtlID==A_SAVE_PROFILE||item->CtlID==A_CAPTURE_SAVE;
+ const bool primary=item->CtlID==A_PLAY||item->CtlID==A_SAVE_GAME||item->CtlID==A_SAVE_PROFILE||item->CtlID==A_CAPTURE_SAVE||item->CtlID==COVER_IMPORT;
  const bool disabled=(item->itemState&ODS_DISABLED)!=0;
  const bool pressed=(item->itemState&ODS_SELECTED)!=0;
  round(item->hDC,item->rcItem,disabled?surface:(primary?accent:(pressed?line:RGB(34,48,65))),CLR_INVALID,10);

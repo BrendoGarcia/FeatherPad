@@ -1,6 +1,7 @@
 #pragma once
 #include <windows.h>
 #include <string>
+constexpr int COVER_IMPORT=810;
 struct CoverCrop {double x=.5,y=.5,zoom=1;};
 extern HWND coverPreviewWindow;
 RECT coverCropRect(int width,int height,const CoverCrop& crop);

@@ -4,7 +4,7 @@
 HWND coverPreviewWindow=nullptr;
 namespace {
  std::wstring sourcePath;CoverCrop framing;HWND owner=nullptr;
- enum {Import=810,Cancel,Left,Right,Up,Down,ZoomIn,ZoomOut,Reset};
+ enum {Import=COVER_IMPORT,Cancel,Left,Right,Up,Down,ZoomIn,ZoomOut,Reset};
  void rectangle(HDC dc,RECT r,COLORREF color){SetDCBrushColor(dc,color);FillRect(dc,&r,static_cast<HBRUSH>(GetStockObject(DC_BRUSH)));}
  void text(HDC dc,const std::wstring& value,RECT r,int size,COLORREF color){HFONT font=CreateFontW(-size,0,0,0,FW_NORMAL,FALSE,FALSE,FALSE,DEFAULT_CHARSET,0,0,CLEARTYPE_QUALITY,0,L"Segoe UI");auto old=SelectObject(dc,font);SetBkMode(dc,TRANSPARENT);SetTextColor(dc,color);DrawTextW(dc,value.c_str(),-1,&r,DT_LEFT|DT_WORDBREAK);SelectObject(dc,old);DeleteObject(font);}
  void paint(HDC dc){

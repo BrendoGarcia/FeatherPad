@@ -33,6 +33,13 @@ int displayFeaturesTest(std::string& log){
   check(preset==5?IsZoomed(win)!=FALSE:contained(bounds,work),"standard window preset respects monitor work area and taskbar");}
  applyWindowPreset(1);
  for(Page p:{Page::Settings,Page::Editor,Page::Controls,Page::Players,Page::General,Page::Display,Page::Compatibility,Page::Metrics,Page::Statistics}){openPage(p,p==Page::Editor||p==Page::Statistics?0:-1);RECT bounds{};GetWindowRect(panel,&bounds);check(panel&&contained(bounds,monitorWorkArea(panel))&&controlsFit(panel),"settings/editor controls and Conclude fit current monitor");closePanel();}
+ // Exercise 100%, 150%, 200% transforms and native font sizing on a bounded test window.
+ HWND scaled=createFittedWindow(L"FeatherPadPanel",L"DPI fixture",200,160,win);HWND child=CreateWindowExW(0,L"STATIC",L"Scale",WS_CHILD|WS_VISIBLE,0,0,0,0,scaled,nullptr,instance,nullptr);registerLogicalChild(scaled,child,RECT{20,20,180,60});
+ for(int dpi:{96,144,192}){const int width=200*dpi/96,height=160*dpi/96;RECT frame{0,0,200,160};RECT outer{};GetWindowRect(scaled,&outer);RECT current{};GetClientRect(scaled,&current);frame.right=width+(outer.right-outer.left-current.right);frame.bottom=height+(outer.bottom-outer.top-current.bottom);SetWindowPos(scaled,nullptr,work.left,work.top,frame.right,frame.bottom,SWP_NOZORDER|SWP_NOACTIVATE);
+  HDC transformed=GetDC(scaled);int saved=beginLogicalPaint(scaled,transformed);POINT endpoint{200,160};LPtoDP(transformed,&endpoint,1);RestoreDC(transformed,saved);ReleaseDC(scaled,transformed);LOGFONTW font{};GetObjectW(reinterpret_cast<HFONT>(SendMessageW(child,WM_GETFONT,0,0)),sizeof(font),&font);
+  check(std::abs(endpoint.x-width)<=1&&std::abs(endpoint.y-height)<=1&&std::abs(-font.lfHeight-static_cast<int>(std::lround(15*dpi/96.0)))<=1&&controlsFit(scaled),"100/150/200 percent transforms match native font and control geometry");
+ }
+ DestroyWindow(scaled);
  openPage(Page::Display);HWND focused=GetDlgItem(panel,A_CLOSE_PANEL);SetFocus(focused);RECT changed{};GetWindowRect(panel,&changed);changed.right=changed.left+720;changed.bottom=changed.top+650;SendMessageW(panel,WM_DPICHANGED,MAKEWPARAM(144,144),reinterpret_cast<LPARAM>(&changed));check(controlsFit(panel)&&GetFocus()==focused,"DPI-change suggested bounds relayout native children without losing focus");snapshot(panel,L"display-120.bmp");closePanel();
  openPage(Page::Editor,0);HWND name=GetDlgItem(panel,400);const auto before=textOf(name);openVirtualKeyboard(name);check(controlsFit(keyboardWindow),"virtual keyboard scales all keys and actions into monitor work area");closeVirtualKeyboard(false);
  const auto source=dataFolder+L"\\crop-source.bmp",left=dataFolder+L"\\crop-left.png",right=dataFolder+L"\\crop-right.png";
